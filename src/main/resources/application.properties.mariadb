@@ -1,0 +1,78 @@
+spring.application.name=ws-ncip-pnpki
+
+# MySQL Database Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/ncip_pnpki?useSSL=false&serverTimezone=UTC
+spring.datasource.username=root
+spring.datasource.password=@NCIPdb2025
+
+# JDBC Driver
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA Configuration
+spring.jpa.database-platform=org.hibernate.dialect.MySQL8Dialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+
+# File Upload Configuration
+spring.servlet.multipart.max-file-size=50MB
+spring.servlet.multipart.max-request-size=100MB
+
+# PDF Signing Configuration
+pdf.signing.output-dir=./signed-documents
+pdf.signing.company-logo=new-logo.png
+
+# TSA (Time Stamp Authority) Configuration
+pdf.signing.tsa.enabled=true
+pdf.signing.tsa.url=http://timestamp.digicert.com
+# For DICT TSA: http://govca.npki.gov.ph:8442/signserver/tsa?workerName=TimeStampSigner
+pdf.signing.tsa.username=
+pdf.signing.tsa.password=
+
+# Email Configuration (Gmail example - update with your SMTP server)
+spring.mail.host=${MAIL_HOST}
+spring.mail.port=${MAIL_PORT}
+spring.mail.username=${MAIL_USERNAME}
+spring.mail.password=${MAIL_PASSWORD}
+spring.mail.properties.mail.smtp.auth=${MAIL_PROPERTIES_MAIL_SMTP_AUTH}
+spring.mail.properties.mail.smtp.ssl.enable=${MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE}
+#STARTTLS
+#spring.mail.properties.mail.smtp.starttls.enable=${MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE}
+#spring.mail.properties.mail.smtp.starttls.required=${MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED}
+spring.mail.properties.mail.smtp.socketFactory.port=${MAIL_PROPERTIES_MAIL_SMTP_SOCKETFACTORY_PORT}
+spring.mail.properties.mail.smtp.socketFactory.class=javax.net.ssl.SSLSocketFactory
+spring.mail.properties.mail.smtp.socketFactory.fallback=${MAIL_PROPERTIES_MAIL_SMTP_SOCKETFACTORY_FALLBACK}
+
+# Application URL (for email links)
+app.url=http://localhost:5173
+
+# Server Configuration
+server.port=${PORT}
+server.address=0.0.0.0
+server.ssl.keystore=${SSL_KEYSTORE}
+server.ssl.keystore-password=${SSL_KEYSTORE_PASSWORD}
+server.ssl.keystore-type=${SSL_KEYSTORE_TYPE}
+ssl.require-ssl=${SSL_REQUIRE}
+
+# Logging
+logging.level.com.github.ws_ncip_pnpki=DEBUG
+logging.level.org.springframework.mail=DEBUG
+
+# JWT Configuration
+jwt.secret=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+jwt.expiration=86400000
+# 86400000 milliseconds = 24 hours
+jwt.refresh.expiration=604800000
+# 604800000 milliseconds = 7 days
+
+# P12 Certificate storage
+p12.certificate-path = ${P12_PATH}
+file.upload.dir = uploads/signatures
+
+
+# Development
+app.cookie.secure=false
+
+# Production
+# app.cookie.secure=true
+
+
