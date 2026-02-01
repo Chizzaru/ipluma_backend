@@ -1,9 +1,6 @@
 package com.github.ws_ncip_pnpki.service;
 
-import com.github.ws_ncip_pnpki.dto.OffsetBasedPageRequest;
-import com.github.ws_ncip_pnpki.dto.PdfUploadResponse;
-import com.github.ws_ncip_pnpki.dto.ShareSignedRequest;
-import com.github.ws_ncip_pnpki.dto.UserSearchResponse;
+import com.github.ws_ncip_pnpki.dto.*;
 import com.github.ws_ncip_pnpki.model.*;
 import com.github.ws_ncip_pnpki.repository.DocumentForwardRepository;
 import com.github.ws_ncip_pnpki.repository.DocumentRepository;
@@ -49,6 +46,11 @@ public class DocumentService {
     }
 
     @Transactional
+    public Document updateDocument(Document doc){
+        return documentRepository.save(doc);
+    }
+
+    @Transactional
     public Document uploadDocument(MultipartFile file, Long userId) throws IOException {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
@@ -61,6 +63,7 @@ public class DocumentService {
                 .fileType(file.getContentType())
                 .fileSize(file.getSize())
                 .owner(user)
+                .availableForSigning(true)
                 .build();
 
         user.addOwnedDocument(document);
@@ -445,6 +448,17 @@ public class DocumentService {
         return documentRepository.save(document);
     }
 
+    public boolean alreadyExist(String fileName, Long ownerId){
+        return documentRepository.existsByFileNameAndOwnerId(fileName, ownerId);
+    }
+
+    @Transactional
+    public void updateDelete(Long documentId){
+        Document doc = documentRepository.findById(documentId).orElseThrow();
+        doc.setDeleted(true);
+        documentRepository.save(doc);
+    }
+
 
     @Transactional
     public void deleteDocument(Long documentId, Long userId) {
@@ -488,7 +502,7 @@ public class DocumentService {
     }
 
 
-    public Page<PdfUploadResponse> getOwnedUploadDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
+    public Page<ShareResponse> getOwnedUploadDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
 
@@ -509,14 +523,17 @@ public class DocumentService {
             documentPage = documentRepository.searchOwnedUploadDocuments(userId, search, pageable);
         } else {
             //documentPage = documentRepository.findAllByOwnerIdAndStatus( userId, DocumentStatus.UPLOADED, pageable);
-            documentPage = documentRepository.findAllByOwnerIdAndStatusIn(
+            documentPage = documentRepository.findAllByOwnerIdAndStatusInAndDeletedFalse(
                     userId,
-                    List.of(DocumentStatus.UPLOADED, DocumentStatus.SHARED),
+                    List.of(DocumentStatus.UPLOADED,
+                            DocumentStatus.SIGNED ,
+                            DocumentStatus.SHARED,
+                            DocumentStatus.SIGNED_AND_SHARED),
                     pageable
             );
         }
 
-        return documentPage.map(document -> convertToResponse(document, userId));
+        return documentPage.map(document -> convertToShareResponse(document, userId));
     }
 
     public Page<PdfUploadResponse> getSharedDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
@@ -547,7 +564,7 @@ public class DocumentService {
         return documentRepository.findByOwnerId(userId);
     }
 
-    public Page<PdfUploadResponse> getOwnedDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
+    public Page<ShareResponse> getOwnedDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
 
@@ -572,7 +589,7 @@ public class DocumentService {
             documentPage = documentRepository.findOwnedAndSharedDocument(userId, pageable);
         }
 
-        return documentPage.map(document -> convertToResponse(document, userId));
+        return documentPage.map(document -> convertToShareResponse(document, userId));
     }
 
     public Page<PdfUploadResponse> getOwnedSignedDocuments(Long userId, int page, int limit, int offset, String sortBy, String sortDirection, String search){
@@ -622,6 +639,13 @@ public class DocumentService {
     }
 
 
+    // Update deleted to true
+    public void setDeleted(Long documentId, boolean deleted){
+        Document doc = documentRepository.findById(documentId).orElseThrow();
+        doc.setDeleted(deleted);
+        documentRepository.save(doc);
+    }
+
     public long countDocuments(){
         return documentRepository.count();
     }
@@ -629,6 +653,29 @@ public class DocumentService {
     public Document getDocument(Long documentId){
         return documentRepository.findById(documentId).orElseThrow(() -> new IllegalArgumentException("Document not found"));
     }
+
+    private ShareResponse convertToShareResponse(Document document, Long userId) {
+
+        List<DocumentShared> ds = documentSharedRepository.findByIdDocumentId(document.getId());
+
+        DocumentShared shared =
+                documentSharedRepository
+                        .findByIdUserIdAndIdDocumentId(userId, document.getId())
+                        .orElse(null);
+
+        List<ShareResponse.User> sharedToUsers =
+                documentSharedRepository.findByIdDocumentId(document.getId())
+                        .stream()
+                        .map(DocumentShared::getUser)
+                        .map(user -> new ShareResponse.User(
+                                user.getId(),
+                                user.getUsername(),
+                                user.getEmail()))
+                        .toList();
+
+        return getShareResponse(document, sharedToUsers, shared, ds);
+    }
+
 
     private PdfUploadResponse convertToResponse(Document document, Long userId) {
 
@@ -668,14 +715,55 @@ public class DocumentService {
         response.setPermission(shared != null ? shared.getPermission() : null);
         response.setAvailableForViewing(document.isAvailableForViewing());
         response.setAvailableForSigning(document.isAvailableForSigning());
+        response.setParallel(shared != null && shared.isParallel());
         return response;
     }
+
+
+
+    private static ShareResponse getShareResponse(Document document, List<ShareResponse.User> sharedToUsers, DocumentShared shared, List<DocumentShared> ds) {
+        ShareResponse response = new ShareResponse();
+        response.setId(document.getId());
+        response.setFileName(document.getFileName());
+        response.setFilePath(document.getFilePath());
+        response.setFileType(document.getFileType());
+        response.setFileSize(document.getFileSize());
+        response.setStatus(document.getStatus());
+        response.setUploadedAt(document.getUploadedAt());
+        response.setOwnerDetails(new ShareResponse.User(document.getOwner().getId(), document.getOwner().getUsername(), document.getOwner().getEmail()));
+
+
+        response.setSharedToUsers(sharedToUsers);
+        response.setAvailableForViewing(document.isAvailableForViewing());
+        response.setAvailableForSigning(document.isAvailableForSigning());
+
+        List<ShareResponse.SignerStep> signerSteps = ds.stream()
+                        .map(dShared-> {
+                            ShareResponse.User su = new ShareResponse.User(
+                                    dShared.getUser().getId(),
+                                    dShared.getUser().getUsername(),
+                                    dShared.getUser().getEmail()
+                            );
+
+                            ShareResponse.SignerStep step = new ShareResponse.SignerStep();
+                            step.setStep(dShared.getStepNumber());
+                            step.setUserId(dShared.getUser().getId());
+                            step.setUser(su);
+                            step.setPermission(dShared.getPermission());
+                            step.setHasSigned(dShared.getSignedAt() != null);
+                            step.setParallel(dShared.isParallel());
+                            return step;
+                        }).toList();
+        response.setSignerSteps(signerSteps);
+        return response;
+    }
+
 
 
     public List<Document> getSignedAndSharedDocuments(Long userId) {
         return documentRepository.findByOwnerIdAndStatusIn(
                 userId,
-                Arrays.asList(DocumentStatus.SIGNED_AND_SHARED));
+                List.of(DocumentStatus.SIGNED_AND_SHARED));
     }
 
     public boolean isDocumentSignedAndShared(Long documentId) {

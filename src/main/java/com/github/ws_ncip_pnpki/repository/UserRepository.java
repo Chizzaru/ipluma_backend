@@ -27,16 +27,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("""
        SELECT u FROM User u
+       LEFT JOIN u.roles r
        WHERE LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-          OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+          OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')) AND r.name != 'ROLE_ADMIN'
        """)
     List<User> searchUsers(@Param("searchTerm") String searchTerm);
 
     @Query("""
        SELECT u FROM User u
+       LEFT JOIN u.roles r
        WHERE u.id <> :excludeUserId
          AND (LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-           OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+           OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND r.name != 'ROLE_ADMIN'
        """)
     List<User> searchUsersExcludingCurrent(@Param("searchTerm") String searchTerm,
                                            @Param("excludeUserId") Long excludeUserId);
@@ -51,6 +53,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
               FROM DocumentShared d
               WHERE d.user = u
                 AND d.document.id = :documentId
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM u.roles r
+              WHERE r.name = 'ROLE_ADMIN'
           )
     """)
     List<User> findAllByIdNot(

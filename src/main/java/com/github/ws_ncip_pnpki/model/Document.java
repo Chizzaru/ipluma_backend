@@ -80,6 +80,8 @@ public class Document {
     @Column( nullable = false, columnDefinition = "boolean default true")
     private boolean availableForViewing;
 
+    @Column( nullable = false, columnDefinition = "boolean default false")
+    private boolean deleted;
 
     // Business methods
     public void markAsSigned() {

@@ -19,6 +19,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
 
     Page<Document> findByOwnerId(Long userId, Pageable pageable);
 
+    //check if filename already exist using ownerId
+    boolean existsByFileNameAndOwnerId(String fileName, Long ownerId);
+
     // Find documents shared with user
     @Query("SELECT d FROM Document d JOIN d.sharedWithUsers u WHERE u.id = :userId")
     List<Document> findSharedWithUser(@Param("userId") Long userId);
@@ -43,13 +46,14 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
                 sd.user.id = :userId
                 OR (
                     d.owner.id = :userId
-                    AND d.status IN ('UPLOADED','SHARED')
+                    AND d.status IN ('UPLOADED','SIGNED','SHARED','SIGNED_AND_SHARED')
                 )
             )
             AND (
             LOWER(d.fileName) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(sd.user.username) LIKE LOWER(CONCAT('%', :search, '%'))
             )
+            AND d.deleted = false
        """)
     Page<Document> searchOwnedUploadDocuments(
             @Param("userId") Long userId,
@@ -63,9 +67,10 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     WHERE
         sd.user.id = :userId
         OR (
-            d.owner.id = :userId
-            AND d.status IN ('SIGNED_AND_SHARED', 'SIGNED')
+            d.owner.id != :userId
+            AND d.status IN ('SIGNED_AND_SHARED', 'SHARED')
         )
+        AND d.deleted = false
 """)
     Page<Document> allSharedDocuments(
             @Param("userId") Long userId,
@@ -81,11 +86,12 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
             (
                 sd.user.id = :userId
                 OR (
-                    d.owner.id = :userId
-                    AND d.status IN ('SIGNED_AND_SHARED', 'SIGNED')
+                    d.owner.id != :userId
+                    AND d.status IN ('SIGNED_AND_SHARED', 'SHARED')
                 )
             )
             AND LOWER(d.fileName) LIKE LOWER(CONCAT('%', :search, '%'))
+                AND d.deleted = false
     """)
     Page<Document> searchSharedDocuments(
             @Param("userId") Long userId,
@@ -108,7 +114,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
 
     Page<Document> findAllByOwnerIdAndStatus(Long userId, DocumentStatus status, Pageable pageable);
 
-    Page<Document> findAllByOwnerIdAndStatusIn(
+    Page<Document> findAllByOwnerIdAndStatusInAndDeletedFalse(
             Long ownerId,
             Collection<DocumentStatus> statuses,
             Pageable pageable

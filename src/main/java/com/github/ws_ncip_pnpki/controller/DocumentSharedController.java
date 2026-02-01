@@ -1,7 +1,6 @@
 package com.github.ws_ncip_pnpki.controller;
 
-import com.github.ws_ncip_pnpki.dto.PdfUploadResponse;
-import com.github.ws_ncip_pnpki.dto.ShareDocRequest;
+import com.github.ws_ncip_pnpki.dto.*;
 import com.github.ws_ncip_pnpki.service.DocumentSharedService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,37 +27,22 @@ public class DocumentSharedController {
     }
 
     @PostMapping("/documents/share")
-    public ResponseEntity<?> share(@RequestBody ShareDocRequest shareDocRequest) {
+    public ResponseEntity<ShareV2Response> share(@RequestBody ShareV2Request request) {
 
-        List<Long> userIds = shareDocRequest.getUser_ids();
-        List<ShareDocRequest.Steps> steps = shareDocRequest.getSteps();
+        ShareV2Response response =  documentSharedService.shareDoc(request.getDocumentId(),
+                request.isDownloadable(), request.getMessage(),
+                request.getUsers());
 
-        for (Long userId : userIds) {
+        return ResponseEntity.ok().body(response);
+    }
 
-            int step = 0;
+    @PostMapping("/documents/unshare")
+    public ResponseEntity<?> unshare(
+            @RequestBody UnshareRequest request
+    ){
+        documentSharedService.unshare(request.getCurrentUserId(), request.getDocumentId(), request.getUserIds());
 
-            // steps are optional
-            if (steps != null && !steps.isEmpty()) {
-                step = steps.stream()
-                        .filter(s -> s.getUser() != null)
-                        .filter(s -> userId.equals(s.getUser().getId()))
-                        .map(ShareDocRequest.Steps::getStep)
-                        .findFirst()
-                        .orElse(0); // user not in steps → no step
-            }
-
-
-            documentSharedService.share(
-                    shareDocRequest.getDocument_id(),
-                    userId,
-                    shareDocRequest.getMessage(),
-                    shareDocRequest.getDownloadable(),
-                    shareDocRequest.getPermission(),
-                    step   // can be null
-            );
-        }
-
-        return ResponseEntity.ok().build();
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
 
@@ -74,7 +58,7 @@ public class DocumentSharedController {
             @RequestParam(required = false) String search
     ){
         try{
-            Page<PdfUploadResponse> documentPage;
+            Page<ShareResponse> documentPage;
             long totalCount;
 
             // get shared and shared to me
@@ -97,7 +81,7 @@ public class DocumentSharedController {
 
 
 
-    private Map<String, Object> createPaginationInfo(Page<PdfUploadResponse> page, int currentPage, int limit, int offset, long totalItems) {
+    private Map<String, Object> createPaginationInfo(Page<ShareResponse> page, int currentPage, int limit, int offset, long totalItems) {
         Map<String, Object> pagination = new HashMap<>();
         pagination.put("currentPage", currentPage);
         pagination.put("itemsPerPage", limit);

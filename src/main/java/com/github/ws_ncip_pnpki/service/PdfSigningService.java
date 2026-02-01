@@ -1,8 +1,10 @@
 package com.github.ws_ncip_pnpki.service;
 
 import com.github.ws_ncip_pnpki.model.Document;
+import com.github.ws_ncip_pnpki.model.DocumentShared;
 import com.github.ws_ncip_pnpki.model.DocumentStatus;
 import com.github.ws_ncip_pnpki.model.User;
+import com.github.ws_ncip_pnpki.repository.DocumentRepository;
 import com.github.ws_ncip_pnpki.repository.UserRepository;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.io.image.ImageData;
@@ -35,6 +37,7 @@ import java.security.PrivateKey;
 import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -81,6 +84,8 @@ public class PdfSigningService {
 
     @Autowired
     private DocumentSharedService documentSharedService;
+    @Autowired
+    private DocumentRepository documentRepository;
 
 
     public static class SignaturePlacement {
@@ -228,6 +233,24 @@ public class PdfSigningService {
     }
 
 
+    /**
+     * Latest and on used function for signing PDF
+     * @param userId user id
+     * @param ipClient ip address
+     * @param pdfDocument document to be signed
+     * @param signatureId id of the signature in the database
+     * @param certificateHash certificate hash
+     * @param password password
+     * @param placements coordinates of signature image
+     * @param canvasWidth width of the canvas
+     * @param canvasHeight height of the canvas
+     * @param location to where it is signed
+     * @param originalFileName original filename
+     * @param isInitial check if is initial or full signature
+     * @param documentId the document id
+     * @return file path of the signed PDF
+     * @throws Exception
+     */
     public String signPdfPage(
             Long userId,
             String ipClient,
@@ -241,9 +264,7 @@ public class PdfSigningService {
             String location,
             String originalFileName,
             boolean isInitial,
-            Long documentId,
-            String documentStatus,
-            String documentFileName
+            Long documentId
     )throws Exception {
 
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -317,7 +338,10 @@ public class PdfSigningService {
         User user;
         Document doc =  documentService.findById(documentId);
         Path outputFilePath;
-        if((doc.getStatus() == DocumentStatus.SHARED ||
+
+
+
+        /**if((doc.getStatus() == DocumentStatus.SHARED ||
             doc.getStatus() == DocumentStatus.SIGNED_AND_SHARED) &&
                     !Objects.equals(doc.getOwner().getId(), userId)
         ){
@@ -340,8 +364,7 @@ public class PdfSigningService {
             Files.createDirectories(uploadPath);
 
             // Set output file name (keep original name with signed_ prefix)
-            String originalFileNameOnly = originalPath.getFileName().toString();
-            outputFileName = "signed_" + originalFileNameOnly;
+            outputFileName = originalPath.getFileName().toString();
 
             // Set output path to be in the signed subdirectory
             outputFilePath = uploadPath.resolve(outputFileName);
@@ -362,19 +385,33 @@ public class PdfSigningService {
 
             user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+        }*/
+
+        // Get the original document's path
+        String originalDocPath = doc.getFilePath();
+
+        // Check if path is relative or absolute
+        if (!originalDocPath.startsWith(uploadDir)) {
+            // It's a relative path, prepend uploadDir
+            originalDocPath = Paths.get(uploadDir, originalDocPath).toString();
         }
 
+        Path originalPath = Paths.get(originalDocPath);
+
+        // Get parent directory of the original document
+        uploadPath =Paths.get(uploadDir, doc.getOwner().getId().toString(), "signed");
+
+        Files.createDirectories(uploadPath);
+
+        // Set output file name (keep original name with signed_ prefix)
+        outputFileName = originalPath.getFileName().toString();
+
+        // Set output path to be in the signed subdirectory
+        outputFilePath = uploadPath.resolve(outputFileName);
+
+        user = doc.getOwner();
 
 
-        //String outputFileName = "signed_" + UUID.randomUUID() + ".pdf";
-
-        //Path uploadPath = Paths.get(uploadDir, String.valueOf(userId), "signed");
-
-        // Create a directory if it doesn't exist (safe: no error if it already exists)
-        //Files.createDirectories(uploadPath);
-
-        // Build output file inside that directory
-        //Path outputFilePath = uploadPath.resolve(outputFileName);
         File outputFile = outputFilePath.toFile();
 
 
@@ -418,8 +455,8 @@ public class PdfSigningService {
             String timestamp = LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
 
-            Document signed = Document.builder()
-                    .fileName("signed_"+timestamp+"_"+originalFileName)
+            /**Document signed = Document.builder()
+                    .fileName(originalFileName)
                     .filePath(user.getId() +"/signed/"+outputFileName)
                     .fileType("application/pdf")
                     .signedAt(LocalDateTime.now())
@@ -428,7 +465,30 @@ public class PdfSigningService {
                     .owner(user)
                     .build();
 
-            user.addOwnedDocument(signed);
+            user.addOwnedDocument(signed);*/
+
+            DocumentStatus newDocumentStatus;
+            if (Objects.requireNonNull(doc.getStatus()) == DocumentStatus.UPLOADED) {
+                newDocumentStatus = DocumentStatus.SIGNED;
+            } else {
+                // update document shared
+                DocumentShared ds = documentSharedService.findByUserIdAndDocumentId(userId, documentId);
+                ds.setDoneSigning(true);
+                ds.setSignedAt(Instant.now());
+                documentSharedService.saveUpdate(ds);
+                newDocumentStatus = DocumentStatus.SIGNED_AND_SHARED;
+            }
+
+
+            // Update document record
+            doc.setStatus(newDocumentStatus);
+            doc.setFileName(originalFileName);
+            doc.setFilePath(doc.getOwner().getId()+"/signed/"+outputFileName);
+            doc.setFileSize(outputFile.length());
+
+
+            documentService.updateDocument(doc);
+
 
             auditLogService.logSingleSigning(
                     ipClient,pdfDocument.getOriginalFilename(), outputFileName,certificateOwner,"SUCCESS"

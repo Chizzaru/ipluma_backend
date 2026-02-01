@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/documents")
@@ -54,7 +55,7 @@ public class DocumentController {
             @RequestParam(required = false) String search
     ){
         try {
-            Page<PdfUploadResponse> documentsPage;
+            Page<ShareResponse> documentsPage;
             long totalCount;
             // In a real application, you should verify if the user has admin privileges
 
@@ -73,7 +74,7 @@ public class DocumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("data", documentsPage.getContent());
-            response.put("pagination", createPaginationInfo(documentsPage, page, limit, offset, totalCount));
+            response.put("pagination", createSharePaginationInfo(documentsPage, page, limit, offset, totalCount));
 
             return ResponseEntity.ok(response);
 
@@ -103,6 +104,17 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
+    @PatchMapping("/marked-delete")
+    public ResponseEntity<?> markedDelete(
+            @RequestParam("documentIds") List<Long> documentIds
+    ){
+        documentIds.forEach(documentId -> {
+            documentService.setDeleted(documentId, true);
+        });
+
+        return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
     @GetMapping("/uploaded")
     public ResponseEntity<?> getOwnedUploadDocument(
             @RequestParam("user_id") Long userId,
@@ -116,7 +128,7 @@ public class DocumentController {
     ){
 
         try {
-            Page<PdfUploadResponse> documentsPage;
+            Page<ShareResponse> documentsPage;
             long totalCount;
 
             documentsPage = documentService.getOwnedUploadDocuments(userId, page, limit, offset,sortBy, sortDirection, search);
@@ -127,7 +139,7 @@ public class DocumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("data", documentsPage.getContent());
-            response.put("pagination", createPaginationInfo(documentsPage, page, limit, offset, totalCount));
+            response.put("pagination", createSharePaginationInfo(documentsPage, page, limit, offset, totalCount));
 
             return ResponseEntity.ok(response);
 
@@ -209,9 +221,20 @@ public class DocumentController {
     }
 
     @PostMapping("/upload/{userId}")
-    public ResponseEntity<PdfUploadResponse> uploadDocument(
+    public ResponseEntity<?> uploadDocument(
             @RequestParam("file") MultipartFile file,
             @PathVariable Long userId) {
+
+        if(documentService.alreadyExist(file.getOriginalFilename(), userId)){
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "DUPLICATE_FILE");
+            error.put("message", "File already exists on your storage.");
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(error);
+        }
+
         try {
             Document document = documentService.uploadDocument(file, userId);
             PdfUploadResponse response = new PdfUploadResponse();
@@ -222,12 +245,24 @@ public class DocumentController {
             response.setFileSize(document.getFileSize());
             response.setStatus(document.getStatus());
             response.setUploadedAt(document.getUploadedAt());
+            response.setAvailableForSigning(document.isAvailableForSigning());
+            response.setAvailableForViewing(document.isAvailableForViewing());
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
+
+    @PatchMapping("/{documentId}")
+    public ResponseEntity<?> updateDelete(
+            @PathVariable Long documentId
+    ){
+        documentService.updateDelete(documentId);
+
+        return ResponseEntity.noContent().build();
+    }
+
 
     @PostMapping("/{documentId}/sign/{userId}")
     public ResponseEntity<Document> signDocument(
@@ -278,6 +313,8 @@ public class DocumentController {
         );
         return ResponseEntity.ok(document);
     }
+
+
 
 
 
@@ -564,6 +601,18 @@ public class DocumentController {
 
 
     private Map<String, Object> createPaginationInfo(Page<PdfUploadResponse> page, int currentPage, int limit, int offset, long totalItems) {
+        Map<String, Object> pagination = new HashMap<>();
+        pagination.put("currentPage", currentPage);
+        pagination.put("itemsPerPage", limit);
+        pagination.put("offset", offset);
+        pagination.put("totalItems", totalItems);
+        pagination.put("totalPages", page.getTotalPages());
+        pagination.put("hasNext", page.hasNext());
+        pagination.put("hasPrevious", page.hasPrevious());
+        return pagination;
+    }
+
+    private Map<String, Object> createSharePaginationInfo(Page<ShareResponse> page, int currentPage, int limit, int offset, long totalItems) {
         Map<String, Object> pagination = new HashMap<>();
         pagination.put("currentPage", currentPage);
         pagination.put("itemsPerPage", limit);

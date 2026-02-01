@@ -39,6 +39,8 @@ public class DocumentShared {
 
     private int stepNumber;
 
+    private boolean parallel;
+
     private boolean doneSigning;
 
 
@@ -47,12 +49,13 @@ public class DocumentShared {
     @Column(nullable = false, updatable = false)
     private Instant sharedAt;
 
-    public DocumentShared(Document doc, User user, boolean isDownloadable, String permission, int step) {
+    public DocumentShared(Document doc, User user, boolean isDownloadable, String permission, int step, boolean isParallel) {
         this.document = doc;
         this.user = user;
         this.isDownloadable = isDownloadable;
         this.permission = permission;
         this.stepNumber = step;
+        this.parallel = isParallel;
     }
 
     @PrePersist

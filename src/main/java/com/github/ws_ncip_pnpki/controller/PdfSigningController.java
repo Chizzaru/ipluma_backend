@@ -117,8 +117,6 @@ public class PdfSigningController {
             @RequestParam(value = "location", defaultValue = "Unknown Location") String location,
             @RequestParam("isInitial") boolean isInitial,
             @RequestParam("documentId") Long documentId,
-            @RequestParam("documentStatus") String documentStatus,
-            @RequestParam("documentFileName") String documentFileName,
             HttpServletRequest request
     ){
 
@@ -132,7 +130,7 @@ public class PdfSigningController {
 
             String signedFileName = pdfSigningService.signPdfPage(
                     userId, clientIp, pdfDocument, signatureImageId, certificateHash, password,
-                    placements, canvasWidth, canvasHeight, location, originalFilename, isInitial, documentId, documentStatus, documentFileName);
+                    placements, canvasWidth, canvasHeight, location, originalFilename, isInitial, documentId);
 
             return ResponseEntity.ok().body(Map.of(
                     "message", "Document signed successfully",

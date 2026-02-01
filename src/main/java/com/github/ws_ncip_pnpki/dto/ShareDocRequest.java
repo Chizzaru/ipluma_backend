@@ -22,6 +22,7 @@ public class ShareDocRequest {
     public static class Steps {
         private int step;
         private StepUser user;
+        private boolean parallel;
 
 
         @Data
