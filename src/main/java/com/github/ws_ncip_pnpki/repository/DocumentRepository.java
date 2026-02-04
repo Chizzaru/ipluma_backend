@@ -42,13 +42,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         FROM Document d
         LEFT JOIN d.sharedWith sd
         WHERE
-            (
-                sd.user.id = :userId
-                OR (
-                    d.owner.id = :userId
-                    AND d.status IN ('UPLOADED','SIGNED','SHARED','SIGNED_AND_SHARED')
-                )
-            )
+            d.owner.id = :userId
+            AND d.status IN ('UPLOADED','SIGNED','SHARED','SIGNED_AND_SHARED')
             AND (
             LOWER(d.fileName) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(sd.user.username) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -77,21 +72,13 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
             Pageable pageable
     );
 
-
     @Query("""
-        SELECT DISTINCT d
+        SELECT d
         FROM Document d
-        LEFT JOIN d.sharedWith sd
+        JOIN d.sharedWith sd
         WHERE
-            (
-                sd.user.id = :userId
-                OR (
-                    d.owner.id != :userId
-                    AND d.status IN ('SIGNED_AND_SHARED', 'SHARED')
-                )
-            )
-            AND LOWER(d.fileName) LIKE LOWER(CONCAT('%', :search, '%'))
-                AND d.deleted = false
+            d.deleted = false
+            AND LOWER(d.owner.username) LIKE LOWER(CONCAT('%', :search, '%'))
     """)
     Page<Document> searchSharedDocuments(
             @Param("userId") Long userId,

@@ -10,6 +10,7 @@ import java.time.Instant;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Table(name = "document_shared")
 public class DocumentShared {
 
 
@@ -39,6 +40,7 @@ public class DocumentShared {
 
     private int stepNumber;
 
+    @Column(name = "`parallel`")
     private boolean parallel;
 
     private boolean doneSigning;

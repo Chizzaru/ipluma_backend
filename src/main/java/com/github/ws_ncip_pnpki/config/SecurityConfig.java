@@ -1,4 +1,5 @@
 package com.github.ws_ncip_pnpki.config;
+import com.github.ws_ncip_pnpki.service.ExternalSystemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,8 +23,11 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Configuration
 @EnableWebSecurity
@@ -32,6 +36,7 @@ import java.util.List;
 public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
+    private final ExternalSystemService externalSystemService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -72,15 +77,27 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
+        List<String> staticOrigins = Arrays.asList(
+            "http://pluma.local:8006",
+            "http://localhost:5173",
+            "http://192.168.5.117:8006",
+            "http://172.27.80.1:5173",
+            "http://172.17.5.70:5173",
+            "https://ipluma.ncip.gov.ph/"
+        );
+
+
+        // Get dynamic origins from database (cached)
+        List<String> dynamicOrigins = externalSystemService.getAllActiveExternalSystemUrls();
+
+
+        // Combine and deduplicate all origins
+        List<String> allOrigins = Stream.concat(staticOrigins.stream(), dynamicOrigins.stream())
+                .distinct()
+                .collect(Collectors.toList());
+
         // Use exact origins, not patterns (for Set-Cookie to work)
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://pluma.local:8006",
-                "http://localhost:5173",
-                "http://192.168.5.117:8006",
-                "http://172.27.80.1:5173",
-                "http://172.17.5.70:5173",
-                "https://pluma.inveroitsolutions.com/"
-        ));
+        configuration.setAllowedOrigins(allOrigins);
 
         configuration.setAllowCredentials(true); // ✅ MUST be true
 
