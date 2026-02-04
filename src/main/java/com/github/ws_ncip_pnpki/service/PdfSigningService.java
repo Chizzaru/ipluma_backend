@@ -340,53 +340,6 @@ public class PdfSigningService {
         Path outputFilePath;
 
 
-
-        /**if((doc.getStatus() == DocumentStatus.SHARED ||
-            doc.getStatus() == DocumentStatus.SIGNED_AND_SHARED) &&
-                    !Objects.equals(doc.getOwner().getId(), userId)
-        ){
-            // Option A: Shared document scenario
-
-            // Get the original document's path
-            String originalDocPath = doc.getFilePath();
-
-            // Check if path is relative or absolute
-            if (!originalDocPath.startsWith(uploadDir)) {
-                // It's a relative path, prepend uploadDir
-                originalDocPath = Paths.get(uploadDir, originalDocPath).toString();
-            }
-
-            Path originalPath = Paths.get(originalDocPath);
-
-            // Get parent directory of the original document
-            uploadPath =Paths.get(uploadDir, doc.getOwner().getId().toString(), "signed");
-
-            Files.createDirectories(uploadPath);
-
-            // Set output file name (keep original name with signed_ prefix)
-            outputFileName = originalPath.getFileName().toString();
-
-            // Set output path to be in the signed subdirectory
-            outputFilePath = uploadPath.resolve(outputFileName);
-
-            user = doc.getOwner();
-
-            System.out.println("Option A - Shared Document:");
-            System.out.println("  Original path: " + originalDocPath);
-            System.out.println("  Upload path: " + uploadPath);
-            System.out.println("  Signed directory: " + uploadPath);
-            System.out.println("  Output file path: " + outputFilePath);
-        }else{
-            // Option B: User's own document
-            uploadPath = Paths.get(uploadDir, String.valueOf(userId), "signed");
-            Files.createDirectories(uploadPath);
-            outputFileName = "signed_" + UUID.randomUUID() + ".pdf";
-            outputFilePath = uploadPath.resolve(outputFileName);
-
-            user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
-        }*/
-
         // Get the original document's path
         String originalDocPath = doc.getFilePath();
 
@@ -451,32 +404,19 @@ public class PdfSigningService {
 
             System.out.println("\n✅ Multi-page signing completed successfully!");
 
-
-            String timestamp = LocalDateTime.now()
-                    .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-
-            /**Document signed = Document.builder()
-                    .fileName(originalFileName)
-                    .filePath(user.getId() +"/signed/"+outputFileName)
-                    .fileType("application/pdf")
-                    .signedAt(LocalDateTime.now())
-                    .fileSize(outputFile.length())
-                    .status(DocumentStatus.SIGNED)
-                    .owner(user)
-                    .build();
-
-            user.addOwnedDocument(signed);*/
-
             DocumentStatus newDocumentStatus;
-            if (Objects.requireNonNull(doc.getStatus()) == DocumentStatus.UPLOADED) {
-                newDocumentStatus = DocumentStatus.SIGNED;
-            } else {
-                // update document shared
-                DocumentShared ds = documentSharedService.findByUserIdAndDocumentId(userId, documentId);
-                ds.setDoneSigning(true);
-                ds.setSignedAt(Instant.now());
-                documentSharedService.saveUpdate(ds);
-                newDocumentStatus = DocumentStatus.SIGNED_AND_SHARED;
+
+            switch (doc.getStatus()){
+                case DocumentStatus.UPLOADED -> newDocumentStatus = DocumentStatus.SHARED;
+                case DocumentStatus.SIGNED -> newDocumentStatus = DocumentStatus.SIGNED;
+                default -> {
+                    // update document shared
+                    DocumentShared ds = documentSharedService.findByUserIdAndDocumentId(userId, documentId);
+                    ds.setDoneSigning(true);
+                    ds.setSignedAt(Instant.now());
+                    documentSharedService.saveUpdate(ds);
+                    newDocumentStatus = DocumentStatus.SIGNED_AND_SHARED;
+                }
             }
 
 
@@ -508,240 +448,6 @@ public class PdfSigningService {
     }
 
 
-
-    /*private void addVisualSignaturesToPagesPreserving(
-            File srcPdf,
-            File destPdf,
-            List<SignaturePlacement> placements,
-            int digitalSignaturePage,
-            float canvasWidth,
-            float canvasHeight,
-            File signatureImageFile,
-            Certificate[] chain,
-            String location,
-            String reason) throws Exception {
-
-        System.out.println("🖼️  Adding visual signatures (preserving existing signatures)");
-        System.out.println("   Digital signature page: " + digitalSignaturePage);
-
-        // Check if PDF has existing signatures
-        boolean hasExistingSignatures = hasSignatures(srcPdf);
-        System.out.println("   Has existing signatures: " + hasExistingSignatures);
-
-        // FIX: Use StampingProperties with append mode if PDF has signatures
-        PdfReader reader = new PdfReader(srcPdf);
-        PdfWriter writer = new PdfWriter(destPdf);
-
-        StampingProperties stampingProperties = new StampingProperties();
-        if (hasExistingSignatures) {
-            stampingProperties.useAppendMode();
-            System.out.println("   ✅ Using append mode to preserve existing signatures");
-        }
-
-        PdfDocument pdfDoc = new PdfDocument(reader, writer, stampingProperties);
-
-        try {
-            if (!signatureImageFile.exists()) {
-                throw new Exception("Signature file not found");
-            }
-
-            ImageData imageData = ImageDataFactory.create(signatureImageFile.getAbsolutePath());
-            System.out.println("   Image loaded: " + imageData.getWidth() + "x" + imageData.getHeight() + " pixels");
-
-            // Load company logo if configured
-            ImageData companyLogoData = null;
-            if (companyLogoPath != null && !companyLogoPath.isEmpty()) {
-                File logoFile = new File(companyLogoPath);
-                if (logoFile.exists()) {
-                    companyLogoData = ImageDataFactory.create(logoFile.getAbsolutePath());
-                    System.out.println("   Company logo loaded: " + companyLogoData.getWidth() + "x" +
-                            companyLogoData.getHeight() + " pixels");
-                } else {
-                    System.err.println("   ⚠️  Company logo not found at: " + companyLogoPath);
-                }
-            }
-
-
-            String signerName = "Unknown";
-            if (chain != null && chain.length > 0) {
-                try {
-                    java.security.cert.X509Certificate cert = (java.security.cert.X509Certificate) chain[0];
-                    signerName = cert.getSubjectX500Principal().getName();
-                    String[] parts = signerName.split(",");
-                    for (String part : parts) {
-                        if (part.trim().startsWith("CN=")) {
-                            signerName = part.trim().substring(3);
-                            break;
-                        }
-                    }
-                } catch (Exception e) {
-                    System.err.println("Could not extract signer name: " + e.getMessage());
-                }
-            }
-
-            int added = 0;
-            for (int i = 0; i < placements.size(); i++) {
-                SignaturePlacement placement = placements.get(i);
-
-                System.out.println("\n📝 Adding visual signature to Page " + placement.pageNumber);
-
-                if (placement.pageNumber > pdfDoc.getNumberOfPages() || placement.pageNumber < 1) {
-                    System.err.println("   ❌ Invalid page: " + placement.pageNumber);
-                    continue;
-                }
-
-                com.itextpdf.kernel.pdf.PdfPage page = pdfDoc.getPage(placement.pageNumber);
-                Rectangle pageSize = page.getPageSize();
-
-                Rectangle rect = calculateSignatureRectangle(
-                        placement,
-                        canvasWidth,
-                        canvasHeight,
-                        pageSize.getWidth(),
-                        pageSize.getHeight()
-                );
-
-                System.out.println("   Rectangle: X=" + rect.getX() + ", Y=" + rect.getY() +
-                        ", W=" + rect.getWidth() + ", H=" + rect.getHeight());
-
-                // FIX: When append mode is active, modifications are written as incremental updates
-                PdfCanvas pdfCanvas = new PdfCanvas(page);
-
-                float pointsPerPixel = 72f / 96f;
-                float originalWidth = imageData.getWidth() * pointsPerPixel * 1.5f;
-                float originalHeight = imageData.getHeight() * pointsPerPixel * 1.5f;
-
-                float scale = 1.0f;
-                float maxImageHeight = rect.getHeight() * 0.7f;
-
-                if (originalWidth > rect.getWidth() || originalHeight > maxImageHeight) {
-                    float widthScale = rect.getWidth() / originalWidth;
-                    float heightScale = maxImageHeight / originalHeight;
-                    scale = Math.min(widthScale, heightScale);
-                }
-
-                float imageWidth = originalWidth * scale;
-                float imageHeight = originalHeight * scale;
-
-                float imageX = rect.getX() + (rect.getWidth() - imageWidth) / 2;
-                float imageY = rect.getY() + rect.getHeight() - imageHeight - 4;
-
-                pdfCanvas.saveState();
-                pdfCanvas.concatMatrix(scale, 0, 0, scale, imageX, imageY);
-                pdfCanvas.addImageAt(imageData, 0, 0, false);
-                pdfCanvas.restoreState();
-
-                com.itextpdf.kernel.font.PdfFont font = com.itextpdf.kernel.font.PdfFontFactory.createFont();
-                com.itextpdf.kernel.font.PdfFont boldFont = com.itextpdf.kernel.font.PdfFontFactory.createFont(
-                        com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD
-                );
-
-                float textAreaTop = imageY - 8;
-                float textY = textAreaTop;
-
-                float nameWidth = boldFont.getWidth(signerName, 10);
-                float textX = rect.getX() + (rect.getWidth() - nameWidth) / 2;
-
-                pdfCanvas.saveState();
-                pdfCanvas.beginText();
-                pdfCanvas.setFontAndSize(boldFont, 10);
-                pdfCanvas.moveText(textX, textY);
-                pdfCanvas.showText(signerName);
-                pdfCanvas.endText();
-                pdfCanvas.restoreState();
-                textY -= 14;
-
-                if (reason != null && !reason.isEmpty()) {
-                    String reasonText = "Reason: " + reason;
-                    float reasonWidth = font.getWidth(reasonText, 8);
-                    float reasonX = rect.getX() + (rect.getWidth() - reasonWidth) / 2;
-
-                    pdfCanvas.saveState();
-                    pdfCanvas.beginText();
-                    pdfCanvas.setFontAndSize(font, 8);
-                    pdfCanvas.moveText(reasonX, textY);
-                    pdfCanvas.showText(reasonText);
-                    pdfCanvas.endText();
-                    pdfCanvas.restoreState();
-                    textY -= 10;
-                }
-
-                if (location != null && !location.isEmpty()) {
-                    String locationText = "Location: " + location;
-                    float locationWidth = font.getWidth(locationText, 8);
-                    float locationX = rect.getX() + (rect.getWidth() - locationWidth) / 2;
-
-                    pdfCanvas.saveState();
-                    pdfCanvas.beginText();
-                    pdfCanvas.setFontAndSize(font, 8);
-                    pdfCanvas.moveText(locationX, textY);
-                    pdfCanvas.showText(locationText);
-                    pdfCanvas.endText();
-                    pdfCanvas.restoreState();
-                    textY -= 10;
-                }
-
-                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                String dateStr = sdf.format(new java.util.Date());
-                String dateText = "Date: " + dateStr;
-                float dateWidth = font.getWidth(dateText, 8);
-                float dateX = rect.getX() + (rect.getWidth() - dateWidth) / 2;
-
-                pdfCanvas.saveState();
-                pdfCanvas.beginText();
-                pdfCanvas.setFontAndSize(font, 8);
-                pdfCanvas.moveText(dateX, textY);
-                pdfCanvas.showText(dateText);
-                pdfCanvas.endText();
-                pdfCanvas.restoreState();
-                textY -= 12; // Add space before logo
-
-                // ===== ADD COMPANY LOGO WATERMARK =====
-                if (companyLogoData != null) {
-                    System.out.println("   🏢 Adding company logo watermark");
-
-                    // Calculate logo dimensions (smaller, watermark-like)
-                    float logoMaxWidth = rect.getWidth() * 0.4f; // 40% of signature width
-                    float logoMaxHeight = 30f; // Fixed max height
-
-                    float logoOriginalWidth = companyLogoData.getWidth() * pointsPerPixel;
-                    float logoOriginalHeight = companyLogoData.getHeight() * pointsPerPixel;
-
-                    float logoScale = Math.min(
-                            logoMaxWidth / logoOriginalWidth,
-                            logoMaxHeight / logoOriginalHeight
-                    );
-
-                    float logoWidth = logoOriginalWidth * logoScale;
-                    float logoHeight = logoOriginalHeight * logoScale;
-
-                    // Center the logo horizontally, place below date
-                    float logoX = rect.getX() + (rect.getWidth() - logoWidth) / 2;
-                    float logoY = textY - logoHeight - 4;
-
-                    // Add semi-transparent logo (watermark effect)
-                    pdfCanvas.saveState();
-                    pdfCanvas.setExtGState(
-                            new com.itextpdf.kernel.pdf.extgstate.PdfExtGState().setFillOpacity(0.5f)
-                    );
-                    pdfCanvas.concatMatrix(logoScale, 0, 0, logoScale, logoX, logoY);
-                    pdfCanvas.addImageAt(companyLogoData, 0, 0, false);
-                    pdfCanvas.restoreState();
-
-                    System.out.println("   ✅ Company logo added at Y=" + logoY);
-                }
-
-
-                added++;
-                System.out.println("   ✅ Added visual signature");
-            }
-
-            System.out.println("\n✅ Visual signatures added: " + added);
-
-        } finally {
-            pdfDoc.close();
-        }
-    }*/
 
     private void addVisualSignaturesToPagesPreserving(
             File srcPdf,
@@ -786,7 +492,8 @@ public class PdfSigningService {
 
             // Load company logo/seal if configured
             ImageData sealImageData = null;
-            if (companyLogoPath != null && !companyLogoPath.isEmpty()) {
+
+            if (companyLogoPath != null && !companyLogoPath.isEmpty() && !isInitial) {
                 File logoFile = new File(companyLogoPath);
                 if (logoFile.exists()) {
                     sealImageData = ImageDataFactory.create(logoFile.getAbsolutePath());

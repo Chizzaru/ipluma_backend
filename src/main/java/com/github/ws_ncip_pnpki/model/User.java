@@ -68,9 +68,18 @@ public class User {
     @JsonIgnore
     private List<DocumentForward> receivedForwards = new ArrayList<>();
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    // Notifications sent by this user (as fromUser)
+    @OneToMany(mappedBy = "fromUser", fetch = FetchType.LAZY)
+    @Builder.Default
     @JsonIgnore
-    private List<Notification> notifications = new ArrayList<>();
+    private List<Notification> sentNotifications = new ArrayList<>();
+
+    // Notifications received by this user (as toUser)
+    @OneToMany(mappedBy = "toUser", fetch = FetchType.LAZY)
+    @Builder.Default
+    @JsonIgnore
+    private List<Notification> receivedNotifications = new ArrayList<>();
+
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     @JsonIgnore

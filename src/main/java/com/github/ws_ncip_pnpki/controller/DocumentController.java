@@ -590,7 +590,7 @@ public class DocumentController {
     @DeleteMapping("/{documentId}")
     public ResponseEntity<?> deleteDocument(
             @PathVariable Long documentId,
-            @RequestParam("user_id") Long userId
+            @RequestParam("userId") Long userId
     ){
         documentService.deleteDocument(documentId, userId);
         return ResponseEntity.noContent().build();

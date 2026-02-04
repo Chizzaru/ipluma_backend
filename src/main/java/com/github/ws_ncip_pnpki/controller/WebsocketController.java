@@ -3,6 +3,7 @@ package com.github.ws_ncip_pnpki.controller;
 import com.github.ws_ncip_pnpki.dto.PdfUploadResponse;
 import com.github.ws_ncip_pnpki.dto.WsDocUpdateRequest;
 import com.github.ws_ncip_pnpki.service.DocumentService;
+import com.github.ws_ncip_pnpki.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
@@ -17,6 +18,9 @@ public class WebsocketController {
     @Autowired
     private DocumentService documentService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     @MessageMapping("/doc/locked-in")
     @SendTo("/topic/doc-updates")
     public PdfUploadResponse handleBlockedOthersForSigning(WsDocUpdateRequest request){
@@ -28,5 +32,13 @@ public class WebsocketController {
     public PdfUploadResponse handleUnblockOthersForSigning(WsDocUpdateRequest request){
         return documentService.unblockOthersForSigning(request.getDocumentId(), request.getUserId());
     }
+
+    @MessageMapping("/notifications/unread")
+    @SendTo("/topic/notif-updates")
+    public Long handleUnreadNotificationCount(Long toUserId){
+        return notificationService.getUnreadNotifCount(toUserId);
+    }
+
+
 
 }

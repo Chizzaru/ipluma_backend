@@ -56,17 +56,13 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
             Pageable pageable);
 
     @Query("""
-    SELECT DISTINCT d
-    FROM Document d
-    LEFT JOIN d.sharedWith sd
-    WHERE
-        sd.user.id = :userId
-        OR (
-            d.owner.id != :userId
-            AND d.status IN ('SIGNED_AND_SHARED', 'SHARED')
-        )
-        AND d.deleted = false
-""")
+        SELECT d
+        FROM Document d
+        JOIN d.sharedWith sd
+        WHERE
+            sd.user.id = :userId
+            AND d.deleted = false
+    """)
     Page<Document> allSharedDocuments(
             @Param("userId") Long userId,
             Pageable pageable
@@ -77,7 +73,8 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         FROM Document d
         JOIN d.sharedWith sd
         WHERE
-            d.deleted = false
+            sd.user.id = :userId
+            AND d.deleted = false
             AND LOWER(d.owner.username) LIKE LOWER(CONCAT('%', :search, '%'))
     """)
     Page<Document> searchSharedDocuments(

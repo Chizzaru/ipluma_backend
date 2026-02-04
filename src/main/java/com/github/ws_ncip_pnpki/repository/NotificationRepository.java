@@ -14,8 +14,8 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     @Query("""
             SELECT t FROM Notification t
-            INNER JOIN t.user u
-            WHERE t.user.id = :userId
+            INNER JOIN t.toUser u
+            WHERE t.toUser.id = :userId
             """)
     Page<Notification> allNotification(
             @Param("userId") Long userId,
@@ -24,12 +24,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     @Query("""
             SELECT t FROM Notification t
-            INNER JOIN t.user u
-            WHERE t.user.id = :userId
+            INNER JOIN t.toUser u
+            WHERE t.toUser.id = :userId
             AND (LOWER(t.title) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(t.message) LIKE LOWER(CONCAT('%', :search, '%')))
             """)
     Page<Notification> searchNotification(
             @Param("userId") Long userId,
             @Param("search") String search,
             Pageable pageable);
+
+    Long countByToUser_IdAndOpenedFalse(Long toUserId);
 }

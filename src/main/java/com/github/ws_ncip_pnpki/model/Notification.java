@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 @Entity
+@Table(name = "notifications")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,27 +20,29 @@ public class Notification {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false, name = "user_id")
+    @JoinColumn(name = "to_user_id", nullable = false)
     @JsonIgnore
-    private User user;
+    private User toUser;
 
-    @Column
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "from_user_id", nullable = false)
+    @JsonIgnore
+    private User fromUser;
+
+    @Column(nullable = false)
     private String title;
 
-    @Column
+    @Column(nullable = false, length = 1000)
     private String message;
 
-    @Column(columnDefinition = "boolean default false")
-    private boolean opened;
+    @Column(nullable = false)
+    private boolean opened = false;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
 
     @PrePersist
     protected void setCreatedAtTimestamp(){
         this.createdAt = Instant.now();
     }
-
-
 }

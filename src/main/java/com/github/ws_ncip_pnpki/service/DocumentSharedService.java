@@ -73,7 +73,8 @@ public class DocumentSharedService {
 
             //Create notification
             Notification notification = new Notification();
-            notification.setUser(u);
+            notification.setToUser(ds.getUser());
+            notification.setFromUser(doc.getOwner());
             notification.setTitle("Document Share");
             notification.setMessage(sharedMessage);
 
@@ -167,7 +168,8 @@ public class DocumentSharedService {
 
         //Create notification
         Notification notification = new Notification();
-        notification.setUser(user);
+        notification.setToUser(ds.getUser());
+        notification.setFromUser(doc.getOwner());
         notification.setTitle("Document Share");
         notification.setMessage(sharedMessage);
 

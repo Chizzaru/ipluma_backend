@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +21,12 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
 
+    private final SimpMessagingTemplate messagingTemplate;
+
     @Autowired
-    public NotificationService(NotificationRepository notificationRepository) {
+    public NotificationService(NotificationRepository notificationRepository, SimpMessagingTemplate messagingTemplate) {
         this.notificationRepository = notificationRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Transactional
@@ -55,6 +59,12 @@ public class NotificationService {
         }
 
         return notificationPage;
+    }
+
+    public Long getUnreadNotifCount(Long toUserId){
+        Long count = notificationRepository.countByToUser_IdAndOpenedFalse(toUserId);
+        messagingTemplate.convertAndSend("/topic/notif-updates", count);
+        return count;
     }
 
 

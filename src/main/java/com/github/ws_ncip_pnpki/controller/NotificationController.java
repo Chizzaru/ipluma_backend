@@ -1,6 +1,8 @@
 package com.github.ws_ncip_pnpki.controller;
 
+import com.github.ws_ncip_pnpki.dto.NotificationResponse;
 import com.github.ws_ncip_pnpki.model.Notification;
+import com.github.ws_ncip_pnpki.model.User;
 import com.github.ws_ncip_pnpki.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +47,7 @@ public class NotificationController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("data", notificationPage.getContent());
+            response.put("data", notificationPage.getContent().stream().map(this::convertResponse));
             response.put("pagination", createPaginationInfo(notificationPage, page, limit, offset, totalCount));
 
             return ResponseEntity.ok(response);
@@ -57,11 +59,34 @@ public class NotificationController {
         }
     }
 
+    @GetMapping("/notifications/unread-count/{toUserId}")
+    public Long getUnreadCount( @PathVariable("toUserId") Long toUserId){
+        return notificationService.getUnreadNotifCount(toUserId);
+    }
+
     @PatchMapping("/notifications/{notificationId}/read")
     public ResponseEntity<?> updateNotification(@PathVariable Long notificationId){
         notificationService.readNotification(notificationId);
 
         return ResponseEntity.status(HttpStatus.OK).build();
+    }
+
+    private NotificationResponse convertResponse(Notification notification){
+        NotificationResponse response = new NotificationResponse();
+        response.setId(notification.getId());
+        response.setFromUser(userToFromUser(notification.getFromUser()));
+        response.setTitle(notification.getTitle());
+        response.setMessage(notification.getMessage());
+        response.setOpened(notification.isOpened());
+        response.setCreatedAt(notification.getCreatedAt());
+        return response;
+    }
+
+    private NotificationResponse.FromUser userToFromUser(User user){
+        NotificationResponse.FromUser fromUser = new NotificationResponse.FromUser();
+        fromUser.setId(user.getId());
+        fromUser.setUsername(user.getUsername());
+        return fromUser;
     }
 
 
