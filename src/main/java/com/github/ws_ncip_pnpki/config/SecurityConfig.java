@@ -45,7 +45,9 @@ public class SecurityConfig {
                 //.cors(Customizer.withDefaults()) // Enable CORS
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**","/api/v1/download/**","/api/v1/sign-document-multi","/api/v1/verify-document","/api/v1/documents/view/**","/api/v1/certificates/view/**").permitAll()
+                        .requestMatchers("/api/auth/**","/api/v1/download/**",
+                                "/api/v1/sign-document-multi","/api/v1/verify-document",
+                                "/api/v1/documents/view/**","/api/v1/certificates/view/**","/api/v1/temp/**").permitAll()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers("/api/user/**").hasAnyAuthority("ROLE_USER", "ROLE_ADMIN")
                         .anyRequest().authenticated()

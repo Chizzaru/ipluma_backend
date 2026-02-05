@@ -57,33 +57,38 @@ public class User {
     private List<Document> ownedDocuments = new ArrayList<>();
 
     // Documents shared with this user
-    @ManyToMany(mappedBy = "sharedWithUsers")
+    @ManyToMany(mappedBy = "sharedWithUsers", cascade = CascadeType.REMOVE)
     @Builder.Default
     @JsonIgnore
     private List<Document> sharedDocuments = new ArrayList<>();
 
     // Forwarded documents received by this user
-    @OneToMany(mappedBy = "forwardedTo", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "forwardedTo", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @Builder.Default
     @JsonIgnore
     private List<DocumentForward> receivedForwards = new ArrayList<>();
 
     // Notifications sent by this user (as fromUser)
-    @OneToMany(mappedBy = "fromUser", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "fromUser", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @Builder.Default
     @JsonIgnore
     private List<Notification> sentNotifications = new ArrayList<>();
 
     // Notifications received by this user (as toUser)
-    @OneToMany(mappedBy = "toUser", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "toUser", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @Builder.Default
     @JsonIgnore
     private List<Notification> receivedNotifications = new ArrayList<>();
 
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.REMOVE)
     @JsonIgnore
     private List<DocumentShared> documentSharedList = new ArrayList<>();
+
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private Employee employee;
 
 
 
