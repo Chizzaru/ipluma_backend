@@ -2,7 +2,9 @@
 package com.github.ws_ncip_pnpki.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.ws_ncip_pnpki.dto.SignaturePlacementDTO;
 import com.github.ws_ncip_pnpki.dto.SignatureResponseDTO;
 import com.github.ws_ncip_pnpki.model.Document;
 import com.github.ws_ncip_pnpki.service.*;
@@ -20,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -121,10 +124,20 @@ public class PdfSigningController {
     ){
 
         try{
-            List<PdfSigningService.SignaturePlacement> placements =
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+            List<SignaturePlacementDTO> placementDTOs =
                     objectMapper.readValue(signaturePlacementsJson,
-                            new TypeReference<>() {
+                            new TypeReference<List<SignaturePlacementDTO>>() {
                             });
+
+            // Convert DTOs to service's SignaturePlacement objects
+            List<PdfSigningService.SignaturePlacement> placements = new ArrayList<>();
+            for (SignaturePlacementDTO dto : placementDTOs) {
+                placements.add(dto.toSignaturePlacement());
+            }
+
             // Get client IP address
             String clientIp = getClientIpAddress(request);
 
@@ -138,12 +151,11 @@ public class PdfSigningController {
                     "pagesSigned", placements.size()
             ));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Signing failed: " + e.getMessage()
             ));
         }
-
-
     }
 
 

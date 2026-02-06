@@ -91,7 +91,7 @@ public class NotificationService {
         response.setStatus(document.getStatus());
         response.setUploadedAt(document.getUploadedAt());
         response.setOwnerDetails(new PdfUploadResponse.OwnerDetails(document.getOwner().getId(), document.getOwner().getUsername(), document.getOwner().getEmail()));
-        response.setSharedToUsers(document.getSharedWithUsers().stream().map(user -> new UserSearchResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRoles())).toList());
+        response.setSharedToUsers(document.getSharedWithUsers().stream().map(user -> new UserSearchResponse(user.getId(), user.getUsername(), user.getEmail(), "",user.getRoles())).toList());
         return response;
     }
 

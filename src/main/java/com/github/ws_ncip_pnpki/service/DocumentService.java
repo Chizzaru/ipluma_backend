@@ -268,7 +268,7 @@ public class DocumentService {
                         .map(user -> new UserSearchResponse(
                                 user.getId(),
                                 user.getUsername(),
-                                user.getEmail(),
+                                user.getEmail(),"",
                                 user.getRoles()))
                         .toList();
 
@@ -317,7 +317,7 @@ public class DocumentService {
                         .map(user -> new UserSearchResponse(
                                 user.getId(),
                                 user.getUsername(),
-                                user.getEmail(),
+                                user.getEmail(),"",
                                 user.getRoles()))
                         .toList();
 
@@ -691,7 +691,7 @@ public class DocumentService {
                         .map(user -> new UserSearchResponse(
                                 user.getId(),
                                 user.getUsername(),
-                                user.getEmail(),
+                                user.getEmail(),"",
                                 user.getRoles()))
                         .toList();
 

@@ -288,7 +288,7 @@ public class DocumentSharedService {
                         .map(user -> new UserSearchResponse(
                                 user.getId(),
                                 user.getUsername(),
-                                user.getEmail(),
+                                user.getEmail(),"",
                                 user.getRoles()))
                         .toList();
 

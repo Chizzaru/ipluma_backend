@@ -4,7 +4,9 @@ import com.github.ws_ncip_pnpki.dto.PdfUploadResponse;
 import com.github.ws_ncip_pnpki.dto.UserListResponse;
 import com.github.ws_ncip_pnpki.dto.UserResponse;
 import com.github.ws_ncip_pnpki.dto.UserSearchResponse;
+import com.github.ws_ncip_pnpki.model.TemporaryCredential;
 import com.github.ws_ncip_pnpki.model.User;
+import com.github.ws_ncip_pnpki.service.TemporaryCredentialService;
 import com.github.ws_ncip_pnpki.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,14 +33,17 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final UserService userService;
+    private final TemporaryCredentialService temporaryCredentialService;
 
     @Autowired
-    public UserController(UserService userService) {
+    public UserController(UserService userService, TemporaryCredentialService temporaryCredentialService) {
         this.userService = userService;
+        this.temporaryCredentialService = temporaryCredentialService;
     }
 
     @GetMapping
     public ResponseEntity<?> getAllUsers(
+            @RequestParam(value = "userId") Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(defaultValue = "0") int offset,
@@ -47,7 +52,7 @@ public class UserController {
             @RequestParam(value = "search", required = false) String search
     ){
         try {
-            Page<UserResponse> usersPage = userService.getAllUsers(page, limit, offset, sortBy, sortDirection, search);
+            Page<UserResponse> usersPage = userService.getAllUsers(page, limit, offset, sortBy, sortDirection, search, userId);
             long totalCount = userService.getTotalCount();
 
             Map<String, Object> response = new HashMap<>();
@@ -73,11 +78,16 @@ public class UserController {
         try {
             List<User> users = userService.searchUsers(query, excludeCurrent, currentUserId, documentId);
 
+
+
             // get id, username, email from users list
             List<UserSearchResponse> lookupUsers = users.stream()
-                    .map(user -> new UserSearchResponse(
-                            user.getId(), user.getUsername(), user.getEmail(), user.getRoles()
-                    )).toList();
+                    .map(user -> {
+                                String password = temporaryCredentialService.getTemporaryPassword(user.getId());
+                                return new UserSearchResponse(user.getId(), user.getUsername(), user.getEmail(), password, user.getRoles());
+                    }
+
+                    ).toList();
 
 
             Map<String, Object> response = new HashMap<>();

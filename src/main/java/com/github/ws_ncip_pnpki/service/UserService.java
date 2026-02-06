@@ -4,6 +4,7 @@ import com.github.ws_ncip_pnpki.dto.OffsetBasedPageRequest;
 import com.github.ws_ncip_pnpki.dto.UserListResponse;
 import com.github.ws_ncip_pnpki.dto.UserResponse;
 import com.github.ws_ncip_pnpki.model.Document;
+import com.github.ws_ncip_pnpki.model.Employee;
 import com.github.ws_ncip_pnpki.model.User;
 import com.github.ws_ncip_pnpki.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,14 +21,19 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final TemporaryCredentialService temporaryCredentialService;
+
+    private final EmployeeService employeeService;
 
     @Autowired
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, TemporaryCredentialService temporaryCredentialService, EmployeeService employeeService) {
         this.userRepository = userRepository;
+        this.temporaryCredentialService = temporaryCredentialService;
+        this.employeeService = employeeService;
     }
 
 
-    public Page<UserResponse> getAllUsers(int page, int limit, int offset, String sortBy, String sortDirection, String search) {
+    public Page<UserResponse> getAllUsers(int page, int limit, int offset, String sortBy, String sortDirection, String search, Long userId) {
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
 
@@ -43,7 +49,7 @@ public class UserService {
         // Execute a query with search
         Page<User> userPage;
         if (search != null && !search.trim().isEmpty()) {
-            userPage = userRepository.findByEmailOrUsernameContaining(search, search, pageable);
+            userPage = userRepository.findByEmailOrUsernameContainingAndIdNot(search, search, userId, pageable);
         } else {
             userPage = userRepository.findAll(pageable);
         }
@@ -83,10 +89,16 @@ public class UserService {
 
 
     private UserResponse convertToUserResponse(User user) {
+
+        Long employeeId = user.getEmployee().getId();
+
+        String password = temporaryCredentialService.getTemporaryPassword(employeeId);
+
         return UserResponse.builder()
                 .id(user.getId())
                 .email(user.getEmail())
                 .username(user.getUsername())
+                .password(password)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .role(user.getRoles())

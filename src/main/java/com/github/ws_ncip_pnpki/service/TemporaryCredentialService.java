@@ -74,6 +74,10 @@ public class TemporaryCredentialService {
         });
     }
 
+    public String getTemporaryPassword(Long employeeId){
+        return temporaryCredentialRepository.findPasswordByEmployeeId(employeeId);
+    }
+
 
     private String generateStrongPassword() {
         SecureRandom random = new SecureRandom();

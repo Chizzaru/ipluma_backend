@@ -15,6 +15,7 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.StampingProperties;
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
 import com.itextpdf.layout.Canvas;
+import com.itextpdf.layout.element.Div;
 import com.itextpdf.layout.element.Image;
 import com.itextpdf.signatures.*;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -94,8 +95,11 @@ public class PdfSigningService {
         public float y;
         public float width;
         public float height;
+        public float rotation; // Add rotation field
 
-        public SignaturePlacement() {}
+        public SignaturePlacement() {
+            this.rotation = 0; // Default to 0 degrees
+        }
 
         public SignaturePlacement(int pageNumber, float x, float y, float width, float height) {
             this.pageNumber = pageNumber;
@@ -103,6 +107,16 @@ public class PdfSigningService {
             this.y = y;
             this.width = width;
             this.height = height;
+            this.rotation = 0; // Default to 0 degrees
+        }
+
+        public SignaturePlacement(int pageNumber, float x, float y, float width, float height, float rotation) {
+            this.pageNumber = pageNumber;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.rotation = rotation;
         }
 
         public int getPageNumber() { return pageNumber; }
@@ -115,6 +129,8 @@ public class PdfSigningService {
         public void setWidth(float width) { this.width = width; }
         public float getHeight() { return height; }
         public void setHeight(float height) { this.height = height; }
+        public float getRotation() { return rotation; }
+        public void setRotation(float rotation) { this.rotation = rotation; }
     }
 
     /**
@@ -135,6 +151,15 @@ public class PdfSigningService {
             Security.addProvider(new BouncyCastleProvider());
         }
 
+        // Log rotation information
+        System.out.println("\n=== Processing " + placements.size() + " signature placements ===");
+        for (int i = 0; i < placements.size(); i++) {
+            SignaturePlacement placement = placements.get(i);
+            System.out.println("Placement " + i + ": page=" + placement.pageNumber +
+                    ", rotation=" + placement.rotation + "°");
+        }
+
+        // Rest of the existing code remains the same...
         File outputDirectory = new File(outputDir);
         if (!outputDirectory.exists()) {
             outputDirectory.mkdirs();
@@ -154,14 +179,7 @@ public class PdfSigningService {
         // Extract certificate owner information
         String certificateOwner = "Unknown";
         if (chain.length > 0 && chain[0] instanceof X509Certificate x509Cert) {
-
-            // Get the subject DN (Distinguished Name)
-
-            // Option 1: Use the full DN
             certificateOwner = x509Cert.getSubjectX500Principal().getName();
-
-            // Option 2: Extract just the CN (Common Name) - cleaner for logs
-            // certificateOwner = extractCN(subjectDN);
         }
 
         File tempPdfFile = File.createTempFile("temp_pdf_", ".pdf");
@@ -217,10 +235,8 @@ public class PdfSigningService {
             System.out.println("\n✅ Multi-page signing completed successfully!");
 
             auditLogService.logSingleSigning(
-                ipClient,pdfDocument.getOriginalFilename(), outputFileName,certificateOwner,"SUCCESS"
+                    ipClient,pdfDocument.getOriginalFilename(), outputFileName,certificateOwner,"SUCCESS"
             );
-
-
 
             return outputFileName;
 
@@ -406,17 +422,17 @@ public class PdfSigningService {
 
             DocumentStatus newDocumentStatus;
 
-            switch (doc.getStatus()){
-                case DocumentStatus.UPLOADED -> newDocumentStatus = DocumentStatus.SHARED;
-                case DocumentStatus.SIGNED -> newDocumentStatus = DocumentStatus.SIGNED;
-                default -> {
-                    // update document shared
-                    DocumentShared ds = documentSharedService.findByUserIdAndDocumentId(userId, documentId);
-                    ds.setDoneSigning(true);
-                    ds.setSignedAt(Instant.now());
-                    documentSharedService.saveUpdate(ds);
-                    newDocumentStatus = DocumentStatus.SIGNED_AND_SHARED;
-                }
+            if (Objects.requireNonNull(doc.getStatus()) == DocumentStatus.UPLOADED) {
+                newDocumentStatus = DocumentStatus.SIGNED;
+            } else if(Objects.requireNonNull(doc.getStatus()) == DocumentStatus.SIGNED && Objects.equals(doc.getOwner().getId(), userId)){
+                newDocumentStatus = DocumentStatus.SIGNED;
+            } else {
+                // update document shared
+                DocumentShared ds = documentSharedService.findByUserIdAndDocumentId(userId, documentId);
+                ds.setDoneSigning(true);
+                ds.setSignedAt(Instant.now());
+                documentSharedService.saveUpdate(ds);
+                newDocumentStatus = DocumentStatus.SIGNED_AND_SHARED;
             }
 
 
@@ -488,12 +504,12 @@ public class PdfSigningService {
             }
 
             ImageData signatureImageData = ImageDataFactory.create(signatureImageFile.getAbsolutePath());
-            System.out.println("   Signature image loaded: " + signatureImageData.getWidth() + "x" + signatureImageData.getHeight() + " pixels");
+            System.out.println("   Signature image loaded: " + signatureImageData.getWidth() + "x" +
+                    signatureImageData.getHeight() + " pixels");
 
-            // Load company logo/seal if configured
+            // Load company logo/seal if configured (only for full signatures)
             ImageData sealImageData = null;
-
-            if (companyLogoPath != null && !companyLogoPath.isEmpty() && !isInitial) {
+            if (!isInitial && companyLogoPath != null && !companyLogoPath.isEmpty()) {
                 File logoFile = new File(companyLogoPath);
                 if (logoFile.exists()) {
                     sealImageData = ImageDataFactory.create(logoFile.getAbsolutePath());
@@ -504,9 +520,9 @@ public class PdfSigningService {
                 }
             }
 
-            // Extract signer name from certificate
+            // Extract signer name from certificate (only for full signatures)
             String signerName = "UNKNOWN SIGNER";
-            if (chain != null && chain.length > 0) {
+            if (!isInitial && chain != null && chain.length > 0) {
                 try {
                     X509Certificate cert = (X509Certificate) chain[0];
                     String dn = cert.getSubjectX500Principal().getName();
@@ -522,174 +538,262 @@ public class PdfSigningService {
                 }
             }
 
-            // Create fonts
-            com.itextpdf.kernel.font.PdfFont regularFont =
-                    com.itextpdf.kernel.font.PdfFontFactory.createFont(
-                            com.itextpdf.io.font.constants.StandardFonts.HELVETICA
-                    );
-            com.itextpdf.kernel.font.PdfFont boldFont =
-                    com.itextpdf.kernel.font.PdfFontFactory.createFont(
-                            com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD
-                    );
+            // Create fonts (only for full signatures)
+            com.itextpdf.kernel.font.PdfFont regularFont = null;
+            com.itextpdf.kernel.font.PdfFont boldFont = null;
+
+            if (!isInitial) {
+                regularFont = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                        com.itextpdf.io.font.constants.StandardFonts.HELVETICA
+                );
+                boldFont = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                        com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD
+                );
+            }
 
             int added = 0;
             for (SignaturePlacement placement : placements) {
-                System.out.println("\n📝 Adding visual signature to Page " + placement.pageNumber);
+                float rotation = placement.getRotation();
+                System.out.println("\n📝 Adding visual signature to Page " + placement.pageNumber +
+                        " (Rotation: " + rotation + "°)");
 
-                if (placement.pageNumber > pdfDoc.getNumberOfPages() || placement.pageNumber < 1) {
-                    System.err.println("   ❌ Invalid page: " + placement.pageNumber);
+                // Validate page number
+                if (placement.pageNumber < 1 || placement.pageNumber > pdfDoc.getNumberOfPages()) {
+                    System.err.println("   ❌ Invalid page number: " + placement.pageNumber +
+                            ". PDF has " + pdfDoc.getNumberOfPages() + " pages.");
                     continue;
                 }
 
+                // Get the page (1-indexed in iText)
                 com.itextpdf.kernel.pdf.PdfPage page = pdfDoc.getPage(placement.pageNumber);
-                Rectangle pageSize = page.getPageSize();
+                Rectangle pageSize = page.getMediaBox();
 
-                Rectangle rect = calculateSignatureRectangle(
-                        placement,
-                        canvasWidth,
-                        canvasHeight,
-                        pageSize.getWidth(),
-                        pageSize.getHeight()
-                );
+                System.out.println("   Page size: " + pageSize.getWidth() + "x" + pageSize.getHeight());
 
-                System.out.println("   Rectangle: X=" + rect.getX() + ", Y=" + rect.getY() +
-                        ", W=" + rect.getWidth() + ", H=" + rect.getHeight());
+                // Calculate PDF coordinates - this is ONLY for the signature image
+                float scaleX = pageSize.getWidth() / canvasWidth;
+                float scaleY = pageSize.getHeight() / canvasHeight;
 
+                // Image coordinates (EXACT size from frontend - no modification)
+                float imageWidth = placement.width * scaleX;
+                float imageHeight = placement.height * scaleY;
+                float imageX = placement.x * scaleX;
+                float imageY = pageSize.getHeight() - (placement.y * scaleY) - imageHeight;
+
+                System.out.println("   Signature image from frontend:");
+                System.out.println("     Canvas: x=" + placement.x + ", y=" + placement.y +
+                        ", w=" + placement.width + ", h=" + placement.height);
+                System.out.println("     PDF: x=" + imageX + ", y=" + imageY +
+                        ", w=" + imageWidth + ", h=" + imageHeight);
+
+                // Ensure coordinates are within page bounds
+                imageX = Math.max(0, Math.min(imageX, pageSize.getWidth() - imageWidth));
+                imageY = Math.max(0, Math.min(imageY, pageSize.getHeight() - imageHeight));
+                imageWidth = Math.min(imageWidth, pageSize.getWidth() - imageX);
+                imageHeight = Math.min(imageHeight, pageSize.getHeight() - imageY);
+
+                System.out.println("   Final image position: (" + imageX + ", " + imageY + ")");
+                System.out.println("   Final image size: " + imageWidth + "x" + imageHeight);
+
+                // Create PdfCanvas
                 PdfCanvas pdfCanvas = new PdfCanvas(page);
 
-                // Conversion constant (needed for all image scaling)
-                float pointsPerPixel = 72f / 96f;
+                // FIRST: Draw seal/logo BEHIND the signature image (only for full signatures)
+                if (!isInitial && sealImageData != null) {
+                    System.out.println("   🏢 Drawing seal behind signature image");
 
-                // ===== LAYOUT DESIGN (matching template) =====
-                // Total height breakdown:
-                // - Signature image area: 50% of height
-                // - Horizontal line: 1pt
-                // - Name text: 14pt
-                // - Date text: 10pt
-                // - Padding: remaining space
-
-                float padding = 8f;
-                float lineThickness = 1f;
-
-                // Calculate areas
-                float signatureAreaHeight = rect.getHeight() * 0.5f;
-                float textAreaHeight = rect.getHeight() - signatureAreaHeight - padding * 2;
-
-                // Seal dimensions (centered both horizontally AND vertically)
-                float sealSize = Math.min(rect.getHeight() * 0.8f, rect.getWidth() * 0.6f);
-                float sealX = rect.getX() + (rect.getWidth() - sealSize) / 2;
-                float sealY = rect.getY() + (rect.getHeight() - sealSize) / 2;  // Centered vertically
-
-                // ===== 1. ADD OFFICIAL SEAL/LOGO AS WATERMARK (behind everything, centered) =====
-                if (sealImageData != null) {
-                    System.out.println("   🏢 Adding official seal watermark (centered)");
-
-                    float sealOriginalWidth = sealImageData.getWidth() * pointsPerPixel;
-                    float sealOriginalHeight = sealImageData.getHeight() * pointsPerPixel;
-
-                    float sealScale = Math.min(
-                            sealSize / sealOriginalWidth,
-                            sealSize / sealOriginalHeight
-                    );
-
-                    float scaledSealWidth = sealOriginalWidth * sealScale;
-                    float scaledSealHeight = sealOriginalHeight * sealScale;
-
-                    // Center the seal in the signature rectangle
-                    float finalSealX = sealX + (sealSize - scaledSealWidth) / 2;
-                    float finalSealY = sealY + (sealSize - scaledSealHeight) / 2;
-
-                    // Add with transparency (watermark effect)
                     pdfCanvas.saveState();
-                    pdfCanvas.setExtGState(
-                            new com.itextpdf.kernel.pdf.extgstate.PdfExtGState().setFillOpacity(0.15f)
-                    );
-                    pdfCanvas.concatMatrix(sealScale, 0, 0, sealScale, finalSealX, finalSealY);
-                    pdfCanvas.addImageAt(sealImageData, 0, 0, false);
-                    pdfCanvas.restoreState();
 
-                    System.out.println("   ✅ Official seal watermark added (centered, 15% opacity)");
+                    // Apply rotation if needed (same as signature)
+                    if (rotation != 0) {
+                        float centerX = imageX + imageWidth / 2;
+                        float centerY = imageY + imageHeight / 2;
+                        double rad = Math.toRadians(-rotation);
+                        float cos = (float)Math.cos(rad);
+                        float sin = (float)Math.sin(rad);
+                        float a = cos;
+                        float b = sin;
+                        float c = -sin;
+                        float d = cos;
+                        float e = centerX - centerX * cos + centerY * sin;
+                        float f = centerY - centerX * sin - centerY * cos;
+                        pdfCanvas.concatMatrix(a, b, c, d, e, f);
+                    }
+
+                    // Calculate seal size - make it slightly larger than signature to wrap behind
+                    float pointsPerPixel = 72f / 96f;
+                    float logoOriginalWidth = sealImageData.getWidth() * pointsPerPixel;
+                    float logoOriginalHeight = sealImageData.getHeight() * pointsPerPixel;
+
+                    // Scale seal to be 1.2x the signature size (wraps nicely behind)
+                    float sealScale = Math.min(
+                            (imageWidth * 1.2f) / logoOriginalWidth,
+                            (imageHeight * 1.2f) / logoOriginalHeight
+                    );
+
+                    float sealWidth = logoOriginalWidth * sealScale;
+                    float sealHeight = logoOriginalHeight * sealScale;
+
+                    // Center the seal behind the signature image
+                    float sealX = imageX + (imageWidth - sealWidth) / 2;
+                    float sealY = imageY + (imageHeight - sealHeight) / 2;
+
+                    // Draw with 30% opacity to show it's behind
+                    pdfCanvas.setExtGState(
+                            new com.itextpdf.kernel.pdf.extgstate.PdfExtGState().setFillOpacity(0.3f)
+                    );
+
+                    pdfCanvas.addImageFittedIntoRectangle(
+                            sealImageData,
+                            new Rectangle(sealX, sealY, sealWidth, sealHeight),
+                            false
+                    );
+
+                    System.out.println("      Position: (" + sealX + ", " + sealY + ")");
+                    System.out.println("      Size: " + sealWidth + "x" + sealHeight);
+                    System.out.println("      Opacity: 30% (behind signature)");
+
+                    pdfCanvas.restoreState();
                 }
 
-                // ===== 2. ADD HANDWRITTEN SIGNATURE (centered) =====
-                // Calculate positions from bottom to top (no line anymore)
-                float nameY = rect.getY() + padding;
-                float sigBottomY = nameY + 7.5f;  // Signature 7.5pt above name
-
-                float sigOriginalWidth = signatureImageData.getWidth() * pointsPerPixel;
-                float sigOriginalHeight = signatureImageData.getHeight() * pointsPerPixel;
-
-                // Scale signature to fit available space
-                float availableWidth = rect.getWidth() - padding * 2;
-                float availableHeight = rect.getY() + rect.getHeight() - sigBottomY - padding;
-
-                float sigScale = Math.min(
-                        availableWidth / sigOriginalWidth,
-                        availableHeight / sigOriginalHeight
-                );
-
-                float sigWidth = sigOriginalWidth * sigScale;
-                float sigHeight = sigOriginalHeight * sigScale;
-
-                // Position signature (centered horizontally, 7.5pt above line)
-                float sigX = rect.getX() + (rect.getWidth() - sigWidth) / 2;
-                float sigY = sigBottomY;
-
+                // SECOND: Draw the signature image on top
                 pdfCanvas.saveState();
-                pdfCanvas.concatMatrix(sigScale, 0, 0, sigScale, sigX, sigY);
-                pdfCanvas.addImageAt(signatureImageData, 0, 0, false);
+
+                // Apply rotation if needed
+                if (rotation != 0) {
+                    // Calculate center point for rotation
+                    float centerX = imageX + imageWidth / 2;
+                    float centerY = imageY + imageHeight / 2;
+
+                    System.out.println("   Rotating around center: (" + centerX + ", " + centerY + ")");
+
+                    // Convert degrees to radians
+                    double rad = Math.toRadians(-rotation);
+                    float cos = (float)Math.cos(rad);
+                    float sin = (float)Math.sin(rad);
+
+                    // Create transformation matrix for rotation around center point
+                    float a = cos;
+                    float b = sin;
+                    float c = -sin;
+                    float d = cos;
+                    float e = centerX - centerX * cos + centerY * sin;
+                    float f = centerY - centerX * sin - centerY * cos;
+
+                    // Apply the transformation matrix
+                    pdfCanvas.concatMatrix(a, b, c, d, e, f);
+                }
+
+                // Draw the signature image - EXACT size from frontend
+                try {
+                    pdfCanvas.addImageFittedIntoRectangle(
+                            signatureImageData,
+                            new Rectangle(imageX, imageY, imageWidth, imageHeight),
+                            false
+                    );
+                    System.out.println("   ✅ Signature image drawn successfully");
+                } catch (Exception e) {
+                    System.err.println("   ❌ Failed to draw signature image: " + e.getMessage());
+                    e.printStackTrace();
+                }
+
+                // Restore graphics state
                 pdfCanvas.restoreState();
 
-                System.out.println("   ✅ Signature image added");
-
-                // ===== 3. ADD SIGNER NAME AND DATE (only if not initial) =====
+                // Add text ONLY if isInitial is false
+                // These are in their OWN container BELOW the signature image
                 if (!isInitial) {
-                    // Add signer name (bold, centered)
-                    float nameWidth = boldFont.getWidth(signerName, 7);
-                    float nameX = rect.getX() + (rect.getWidth() - nameWidth) / 2;
+                    System.out.println("   📝 Adding signer information in separate container");
+
+                    // Text container starts BELOW the image
+                    // Use the same width as the image for consistency
+                    float textContainerX = imageX;
+                    float textContainerWidth = imageWidth;
+                    float textY = imageY - 8; // Start 8 points below the image
+
+                    // Signer name (bold, centered in text container)
+                    float nameWidth = boldFont.getWidth(signerName, 9);
+                    float nameX = textContainerX + (textContainerWidth - nameWidth) / 2;
 
                     pdfCanvas.saveState();
                     pdfCanvas.beginText();
-                    pdfCanvas.setFontAndSize(boldFont, 7);
-                    pdfCanvas.moveText(nameX, nameY);
+                    pdfCanvas.setFontAndSize(boldFont, 9);
+                    pdfCanvas.moveText(nameX, textY);
                     pdfCanvas.showText(signerName);
                     pdfCanvas.endText();
                     pdfCanvas.restoreState();
+                    textY -= 14;
 
-                    System.out.println("   ✅ Signer name added: " + signerName);
+                    // Reason (centered)
+                    /*if (reason != null && !reason.isEmpty()) {
+                        String reasonText = "Reason: " + reason;
+                        float reasonWidth = regularFont.getWidth(reasonText, 8);
+                        float reasonX = textContainerX + (textContainerWidth - reasonWidth) / 2;
 
-                    // Add date (centered below name)
-                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd | HH:mm:ss");
+                        pdfCanvas.saveState();
+                        pdfCanvas.beginText();
+                        pdfCanvas.setFontAndSize(regularFont, 8);
+                        pdfCanvas.moveText(reasonX, textY);
+                        pdfCanvas.showText(reasonText);
+                        pdfCanvas.endText();
+                        pdfCanvas.restoreState();
+                        textY -= 10;
+                    }
+
+                    // Location (centered)
+                    if (location != null && !location.isEmpty()) {
+                        String locationText = "Location: " + location;
+                        float locationWidth = regularFont.getWidth(locationText, 8);
+                        float locationX = textContainerX + (textContainerWidth - locationWidth) / 2;
+
+                        pdfCanvas.saveState();
+                        pdfCanvas.beginText();
+                        pdfCanvas.setFontAndSize(regularFont, 8);
+                        pdfCanvas.moveText(locationX, textY);
+                        pdfCanvas.showText(locationText);
+                        pdfCanvas.endText();
+                        pdfCanvas.restoreState();
+                        textY -= 10;
+                    }*/
+
+                    // Date (centered)
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     String dateStr = sdf.format(new java.util.Date());
                     String dateText = "Date: " + dateStr;
-
-                    float dateY = nameY - 7.5f;  // Tighter spacing (~0.1mm in points)
-                    float dateWidth = regularFont.getWidth(dateText, 7);
-                    float dateX = rect.getX() + (rect.getWidth() - dateWidth) / 2;
+                    float dateWidth = regularFont.getWidth(dateText, 8);
+                    float dateX = textContainerX + (textContainerWidth - dateWidth) / 2;
 
                     pdfCanvas.saveState();
                     pdfCanvas.beginText();
-                    pdfCanvas.setFontAndSize(regularFont, 7);
-                    pdfCanvas.moveText(dateX, dateY);
+                    pdfCanvas.setFontAndSize(regularFont, 8);
+                    pdfCanvas.moveText(dateX, textY);
                     pdfCanvas.showText(dateText);
                     pdfCanvas.endText();
                     pdfCanvas.restoreState();
 
-                    System.out.println("   ✅ Date added: " + dateText);
+                    System.out.println("   ✅ Text container width matches image: " + textContainerWidth);
                 } else {
-                    System.out.println("   ⏸️  Signer name and date hidden (initial signature)");
+                    System.out.println("   ℹ️  Skipping signer info (initial signature)");
                 }
 
                 added++;
-                System.out.println("   ✅ Complete visual signature added");
+                System.out.println("   ✅ Signature added to page " + placement.pageNumber);
             }
 
-            System.out.println("\n✅ Visual signatures added: " + added);
+            System.out.println("\n✅ Successfully added " + added + " visual signatures");
 
+        } catch (Exception e) {
+            System.err.println("❌ Error adding visual signatures: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
         } finally {
             pdfDoc.close();
+            System.out.println("📄 PDF document closed");
         }
     }
+
+
+
     /**
      * Validate certificate before signing
      */
@@ -740,10 +844,22 @@ public class PdfSigningService {
         float scaleX = pdfPageWidth / canvasWidth;
         float scaleY = pdfPageHeight / canvasHeight;
 
+        // Convert canvas coordinates to PDF coordinates
+        // Canvas Y starts from top, PDF Y starts from bottom
         float pdfX = placement.x * scaleX;
         float pdfWidth = placement.width * scaleX;
         float pdfHeight = placement.height * scaleY;
-        float pdfY = pdfPageHeight - (placement.y * scaleY) - pdfHeight;
+        float pdfY = pdfPageHeight - (placement.y * scaleY) - pdfHeight; // This might be wrong
+
+        // Actually, let's debug this:
+        System.out.println("Canvas to PDF conversion:");
+        System.out.println("  Canvas: x=" + placement.x + ", y=" + placement.y +
+                ", w=" + placement.width + ", h=" + placement.height);
+        System.out.println("  PDF Page: w=" + pdfPageWidth + ", h=" + pdfPageHeight);
+        System.out.println("  Scale: x=" + scaleX + ", y=" + scaleY);
+        System.out.println("  PDF: x=" + pdfX + ", y=" + pdfY +
+                ", w=" + pdfWidth + ", h=" + pdfHeight);
+        System.out.println("  Rotation: " + placement.rotation + "°");
 
         pdfX = Math.max(0, Math.min(pdfX, pdfPageWidth - pdfWidth));
         pdfY = Math.max(0, Math.min(pdfY, pdfPageHeight - pdfHeight));
@@ -1134,11 +1250,53 @@ public class PdfSigningService {
         );
     }
 
+    // New method with rotation parameter
+    public String signPdfWithRotation(
+            MultipartFile pdfDocument,
+            MultipartFile signatureImage,
+            MultipartFile certificateFile,
+            int pageNumber,
+            float x,
+            float y,
+            float width,
+            float height,
+            float rotation,
+            float canvasWidth,
+            float canvasHeight,
+            String password,
+            String location) throws Exception {
+
+        List<SignaturePlacement> placements = Arrays.asList(
+                new SignaturePlacement(pageNumber, x, y, width, height, rotation)
+        );
+
+        return signPdfMultiPage(
+                "",
+                pdfDocument,
+                signatureImage,
+                certificateFile,
+                placements,
+                canvasWidth,
+                canvasHeight,
+                password,
+                location
+        );
+    }
+
     public static List<SignaturePlacement> createPlacementsForPages(
             List<Integer> pageNumbers, float x, float y, float width, float height) {
         List<SignaturePlacement> placements = new ArrayList<>();
         for (Integer pageNum : pageNumbers) {
             placements.add(new SignaturePlacement(pageNum, x, y, width, height));
+        }
+        return placements;
+    }
+
+    public static List<SignaturePlacement> createPlacementsForPagesWithRotation(
+            List<Integer> pageNumbers, float x, float y, float width, float height, float rotation) {
+        List<SignaturePlacement> placements = new ArrayList<>();
+        for (Integer pageNum : pageNumbers) {
+            placements.add(new SignaturePlacement(pageNum, x, y, width, height, rotation));
         }
         return placements;
     }
@@ -1152,11 +1310,24 @@ public class PdfSigningService {
         return placements;
     }
 
+    public static List<SignaturePlacement> createPlacementsForRangeWithRotation(
+            int startPage, int endPage, float x, float y, float width, float height, float rotation) {
+        List<SignaturePlacement> placements = new ArrayList<>();
+        for (int i = startPage; i <= endPage; i++) {
+            placements.add(new SignaturePlacement(i, x, y, width, height, rotation));
+        }
+        return placements;
+    }
+
     public static List<SignaturePlacement> createPlacementsForAllPages(
             int totalPages, float x, float y, float width, float height) {
         return createPlacementsForRange(1, totalPages, x, y, width, height);
     }
 
+    public static List<SignaturePlacement> createPlacementsForAllPagesWithRotation(
+            int totalPages, float x, float y, float width, float height, float rotation) {
+        return createPlacementsForRangeWithRotation(1, totalPages, x, y, width, height, rotation);
+    }
     /**
      * Enhanced verification with detailed certificate checks
      */
