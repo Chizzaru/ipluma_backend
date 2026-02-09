@@ -19,4 +19,7 @@ public class TemporaryCredential {
     private Employee employee;
 
     private String password;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean tempEmailSent;
 }

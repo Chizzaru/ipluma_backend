@@ -12,4 +12,12 @@ public interface TemporaryCredentialRepository extends JpaRepository<TemporaryCr
 
     @Query("select u.password from TemporaryCredential u where u.employee.id = :employeeId")
     String findPasswordByEmployeeId(@Param("employeeId") Long employeeId);
+
+
+    @Query("select u from TemporaryCredential u where u.employee.id = :employeeId")
+    TemporaryCredential findByEmployeeId(@Param("employeeId") Long employeeId);
+
+
+    @Query("select u.tempEmailSent from TemporaryCredential u where u.employee.id = :employeeId")
+    boolean isTempEmailSent(@Param("employeeId") Long employeeId);
 }

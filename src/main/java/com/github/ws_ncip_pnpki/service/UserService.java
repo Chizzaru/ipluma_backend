@@ -12,7 +12,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -87,12 +89,26 @@ public class UserService {
         }
     }
 
+    public UserResponse getProfile(Long userId){
+        User user = userRepository.findById(userId).orElseThrow();
+        return convertToUserResponse(user);
+    }
+
+    @Transactional
+    public void changePassword(Long userId, String newPassword){
+        User user = userRepository.findById(userId).orElseThrow();
+        user.setPassword(new BCryptPasswordEncoder().encode(newPassword));
+        userRepository.save(user);
+    }
+
 
     private UserResponse convertToUserResponse(User user) {
 
         Long employeeId = user.getEmployee().getId();
 
         String password = temporaryCredentialService.getTemporaryPassword(employeeId);
+
+        boolean isTempEmailSent = temporaryCredentialService.tempEmailSent(employeeId);
 
         return UserResponse.builder()
                 .id(user.getId())
@@ -102,6 +118,7 @@ public class UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .role(user.getRoles())
+                .tempEmailSent(isTempEmailSent)
                 .build();
     }
 }

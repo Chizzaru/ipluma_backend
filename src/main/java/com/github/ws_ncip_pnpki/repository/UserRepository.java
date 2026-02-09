@@ -26,7 +26,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findByEmailOrUsernameContainingAndIdNot(String email, String username, Long Id, Pageable pageable);
 
 
-
     @Query("""
        SELECT u FROM User u
        LEFT JOIN u.roles r

@@ -17,4 +17,6 @@ public class UserResponse {
     private Set<Role> role;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    @Builder.Default
+    private boolean tempEmailSent = false; // Default to false
 }

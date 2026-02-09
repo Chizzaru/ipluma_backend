@@ -74,8 +74,19 @@ public class TemporaryCredentialService {
         });
     }
 
+    @Transactional
+    public void updateTempEmailSentToTrue(Long employeeId){
+        TemporaryCredential tc = temporaryCredentialRepository.findByEmployeeId(employeeId);
+        tc.setTempEmailSent(true);
+        temporaryCredentialRepository.save(tc);
+    }
+
     public String getTemporaryPassword(Long employeeId){
         return temporaryCredentialRepository.findPasswordByEmployeeId(employeeId);
+    }
+
+    public boolean tempEmailSent(Long employeeId){
+        return temporaryCredentialRepository.isTempEmailSent(employeeId);
     }
 
 

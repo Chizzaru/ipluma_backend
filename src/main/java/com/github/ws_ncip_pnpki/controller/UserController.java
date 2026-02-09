@@ -16,10 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +36,22 @@ public class UserController {
     public UserController(UserService userService, TemporaryCredentialService temporaryCredentialService) {
         this.userService = userService;
         this.temporaryCredentialService = temporaryCredentialService;
+    }
+
+    @GetMapping("/id/{id}")
+    public ResponseEntity<?> getProfile(@PathVariable Long id){
+        UserResponse response = userService.getProfile(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{userId}/change-password")
+    public ResponseEntity<?> updatePassword(
+            @PathVariable Long userId,
+            @RequestParam("newPassword") String newPassword
+    ){
+
+        userService.changePassword(userId, newPassword);
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     @GetMapping
