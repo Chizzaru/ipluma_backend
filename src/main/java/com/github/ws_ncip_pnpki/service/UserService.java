@@ -101,6 +101,10 @@ public class UserService {
         userRepository.save(user);
     }
 
+    public User getUser(Long userId){
+        return userRepository.findById(userId).orElseThrow();
+    }
+
 
     private UserResponse convertToUserResponse(User user) {
 

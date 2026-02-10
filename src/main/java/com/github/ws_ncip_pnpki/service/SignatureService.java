@@ -9,20 +9,14 @@ import com.github.ws_ncip_pnpki.repository.UserRepository;
 import com.github.ws_ncip_pnpki.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -48,9 +42,9 @@ public class SignatureService {
         String filePath;
 
         if(signatureType == SignatureType.FULL){
-            filePath = fileStorageService.storeFile(file, userId, "signatures", 100, 60);
+            filePath = fileStorageService.storeFileV2(file, userId, "signatures");
         }else{
-            filePath = fileStorageService.storeFile(file, userId, "signatures", 60, 60);
+            filePath = fileStorageService.storeFileV2(file, userId, "signatures");
         }
 
         Signature signature = new Signature();
@@ -65,6 +59,36 @@ public class SignatureService {
 
         log.info("Signature uploaded successfully: {}", savedSignature.getId());
         return mapToResponseDTO(savedSignature);
+    }
+
+    @Transactional
+    public void uploadSignatureSetDefault(
+            MultipartFile file,
+            SignatureType signatureType,
+            Long userId) throws IOException {
+
+        validateFile(file);
+        String filePath;
+
+        if(signatureType == SignatureType.FULL){
+            filePath = fileStorageService.storeFileV2(file, userId, "signatures");
+        }else{
+            filePath = fileStorageService.storeFileV2(file, userId, "signatures");
+        }
+
+        Signature signature = new Signature();
+        signature.setFileName(file.getOriginalFilename());
+        signature.setSignatureType(signatureType);
+        signature.setFilePath(filePath);
+        signature.setContentType(file.getContentType());
+        signature.setFileSize(file.getSize());
+        signature.setDefault(true);
+        signature.setUserId(userId);
+
+        Signature savedSignature = signatureRepository.save(signature);
+
+        log.info("Signature uploaded successfully: {}", savedSignature.getId());
+        mapToResponseDTO(savedSignature);
     }
 
     @Transactional

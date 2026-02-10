@@ -104,6 +104,57 @@ public class CertificateService {
         return certificateRepository.save(certificate);
     }
 
+    @Transactional
+    public Certificate uploadCertificateSetDefault(Long userId, MultipartFile file, String password) throws Exception {
+
+        // Validate file
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File is empty");
+        }
+
+        if (!Objects.requireNonNull(file.getOriginalFilename()).toLowerCase().endsWith(".p12")
+                && !file.getOriginalFilename().toLowerCase().endsWith(".pfx")) {
+            throw new IllegalArgumentException("Only P12/PFX files are allowed");
+        }
+
+        // Calculate hash to check for duplicates
+        byte[] fileBytes = file.getBytes();
+        String certificateHash = calculateHash(fileBytes);
+
+        // Check if a certificate already exists for this user
+        if (certificateRepository.existsByUserIdAndCertificateHash(userId, certificateHash)) {
+            throw new IllegalArgumentException("Certificate already exists for this user");
+        }
+
+        // Extract certificate details
+        CertificateDetails details = extractCertificateDetails(fileBytes, password);
+
+        // Create a directory if not exists
+        Path uploadPath = Paths.get(uploadDir, String.valueOf(userId), "certificates");
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+
+        // Generate a unique file name
+        String storedFileName = UUID.randomUUID() + ".p12";
+        String filePath = fileStorageService.storeFile(file, userId, "certificates");
+
+        // Create a certificate entity
+        Certificate certificate = new Certificate();
+        certificate.setUserId(userId);
+        certificate.setFileName(file.getOriginalFilename());
+        certificate.setStoredFileName(storedFileName);
+        certificate.setCertificateHash(certificateHash);
+        certificate.setFilePath(filePath);
+        certificate.setFileSize(file.getSize());
+        certificate.setIssuer(details.getIssuer());
+        certificate.setSubject(details.getSubject());
+        certificate.setExpiresAt(details.getExpiresAt());
+        certificate.setDefault(true);
+
+        return certificateRepository.save(certificate);
+    }
+
     public Path getCertPath(String certificateHash){
         Optional<Certificate> lookUp =  certificateRepository.findByCertificateHashIgnoreCase(certificateHash);
         return lookUp.map(Certificate::getFilePath).map(Paths::get).orElse(null);

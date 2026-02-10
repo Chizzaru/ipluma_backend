@@ -51,8 +51,7 @@ public class FileStorageService {
         return userId + "/" + subFolder + "/" + fileName;
     }
 
-    public String storeFile(MultipartFile file, Long userId, String subFolder,
-                            int targetWidth, int targetHeight) throws IOException {
+    public String storeFileV2(MultipartFile file, Long userId, String subFolder) throws IOException {
 
         Path uploadPath = Paths.get(uploadDir, String.valueOf(userId), subFolder);
 
@@ -68,22 +67,15 @@ public class FileStorageService {
         String newFileName = UUID.randomUUID() + "." + fileExtension;
         Path filePath = uploadPath.resolve(newFileName);
 
-        // If it's a PNG → resize WITH transparency
+        // Handle PNG files - preserve original size and transparency
         if ("png".equals(fileExtension)) {
             BufferedImage original = ImageIO.read(file.getInputStream());
 
-            // Resize while preserving transparency
-            BufferedImage resized = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2d = resized.createGraphics();
-            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            // Ensure transparency is preserved/added
+            BufferedImage transparentImage = ensureTransparency(original);
 
-            g2d.drawImage(original, 0, 0, targetWidth, targetHeight, null);
-            g2d.dispose();
-
-            // Save resized PNG
-            ImageIO.write(resized, "png", filePath.toFile());
+            // Save PNG with transparency
+            ImageIO.write(transparentImage, "png", filePath.toFile());
         } else {
             // Save other file types normally
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
@@ -129,5 +121,69 @@ public class FileStorageService {
         } catch (MalformedURLException ex) {
             throw new RuntimeException("File not found: " + filePath, ex);
         }
+    }
+
+
+
+    /**
+     * Ensures the image has a transparent background.
+     * If the image already has transparency, it's preserved.
+     * If not, converts white/near-white pixels to transparent.
+     */
+    private BufferedImage ensureTransparency(BufferedImage source) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+
+        // Create image with alpha channel
+        BufferedImage transparent = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = transparent.createGraphics();
+
+        // High-quality rendering
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Draw original image
+        g2d.drawImage(source, 0, 0, null);
+        g2d.dispose();
+
+        // Convert white/light pixels to transparent (optional - uncomment if needed)
+        transparent = convertWhiteToTransparent(transparent, 240); // threshold: 240
+
+        return transparent;
+    }
+
+    /**
+     * Converts white or near-white pixels to transparent.
+     *
+     * @param image The source image
+     * @param threshold RGB threshold (0-255). Pixels with R, G, B all >= threshold become transparent
+     * @return Image with white pixels converted to transparent
+     */
+    private BufferedImage convertWhiteToTransparent(BufferedImage image, int threshold) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = image.getRGB(x, y);
+
+                int alpha = (pixel >> 24) & 0xff;
+                int red = (pixel >> 16) & 0xff;
+                int green = (pixel >> 8) & 0xff;
+                int blue = pixel & 0xff;
+
+                // If pixel is white/near-white, make it transparent
+                if (red >= threshold && green >= threshold && blue >= threshold) {
+                    result.setRGB(x, y, 0x00FFFFFF); // Fully transparent white
+                } else {
+                    result.setRGB(x, y, pixel); // Keep original pixel
+                }
+            }
+        }
+
+        return result;
     }
 }

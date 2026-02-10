@@ -99,6 +99,7 @@ public class AuthController {
                     "email", result.getAuthResponse().getEmail(),
                     "roles", result.getAuthResponse().getRoles(),
                     "debug", "cookies_should_be_set",
+                    "finishedSetup", result.getAuthResponse().isFinishedSetup(),
                     "cookieConfig", Map.of(
                             "secure", cookieSecure,
                             "sameSite", cookieSameSite,
@@ -148,7 +149,8 @@ public class AuthController {
                     "id", userDetails.getUser().getId(),
                     "username", userDetails.getUsername(),
                     "email", userDetails.getUser().getEmail(),
-                    "roles", roles
+                    "roles", roles,
+                    "finishedSetup", userDetails.getUser().isFinishedSetup()
             );
 
             return ResponseEntity.ok()
@@ -336,7 +338,8 @@ public class AuthController {
                 "id", userDetails.getUser().getId(),
                 "username", userDetails.getUsername(),
                 "email", userDetails.getUser().getEmail(),
-                "roles", roles
+                "roles", roles,
+                "finishedSetup", userDetails.getUser().isFinishedSetup()
         );
     }
 }

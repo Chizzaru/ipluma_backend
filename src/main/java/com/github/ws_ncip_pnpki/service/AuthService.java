@@ -91,7 +91,9 @@ public class AuthService {
                 userDetails.getUser().getEmail(),
                 roles,
                 jwt,                    // Include access token
-                refreshToken.getToken() // Include refresh token
+                refreshToken.getToken(), // Include refresh token
+                userDetails.getUser().getLastSetupNumber(),
+                userDetails.getUser().isFinishedSetup()
         );
 
         // Return LoginResult with both tokens and user data

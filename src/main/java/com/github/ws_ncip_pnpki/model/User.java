@@ -91,6 +91,13 @@ public class User {
     private Employee employee;
 
 
+    @Column(columnDefinition = "integer default 1")
+    private Integer lastSetupNumber;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean finishedSetup;
+
+
 
     // Helper methods
     public void addOwnedDocument(Document document) {
